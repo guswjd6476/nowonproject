@@ -20,65 +20,52 @@ interface PersonData {
 // Google Spreadsheet 초기화
 async function loadGoogleDoc(): Promise<GoogleSpreadsheet> {
     const formattedKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SHEET_ID } = process.env;
 
-    if (!formattedKey || !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_SHEET_ID) {
+    if (!formattedKey || !GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_SHEET_ID) {
         throw new Error('Missing required environment variables for Google Sheets');
     }
 
     const auth = new GoogleAuth({
         credentials: {
             private_key: formattedKey,
-            client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+            client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
         },
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const authClient = await auth.getClient();
-
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, authClient);
-
+    const doc = new GoogleSpreadsheet(GOOGLE_SHEET_ID, authClient);
     await doc.loadInfo();
     return doc;
 }
 
-// 시트 데이터 가져오기 (전체 데이터)
-async function getSheetData(doc: GoogleSpreadsheet, sheetTitle: string): Promise<UserRegistration[]> {
+// 공통 함수: 시트 데이터 가져오기
+async function getSheetDataForType(
+    doc: GoogleSpreadsheet,
+    sheetTitle: string,
+    personName?: string
+): Promise<UserRegistration[] | PersonData[]> {
     const sheet = doc.sheetsByTitle[sheetTitle];
     if (!sheet) throw new Error(`Sheet with title "${sheetTitle}" not found.`);
 
     await sheet.loadHeaderRow();
     const rows = await sheet.getRows();
     const headers = sheet.headerValues.map((header) => header.trim());
+
+    if (personName) {
+        const personData = rows.filter((row) => row.get('이름') === personName);
+        return personData.map((row) => {
+            const rowData: PersonData = {};
+            headers.forEach((header) => {
+                rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
+            });
+            return rowData;
+        });
+    }
 
     return rows.map((row) => {
         const rowData: UserRegistration = {};
-        headers.forEach((header) => {
-            rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
-        });
-        return rowData;
-    });
-}
-
-// 시트 데이터 가져오기 (특정 사람의 데이터)
-async function getSheetDataForPerson(
-    doc: GoogleSpreadsheet,
-    sheetTitle: string,
-    personName: string
-): Promise<PersonData[]> {
-    const sheet = doc.sheetsByTitle[sheetTitle];
-    if (!sheet) throw new Error(`Sheet with title "${sheetTitle}" not found.`);
-
-    await sheet.loadHeaderRow();
-    const rows = await sheet.getRows();
-    const headers = sheet.headerValues.map((header) => header.trim());
-
-    const personData = rows.filter((row) => {
-        const name = row.get('이름');
-        return name === personName;
-    });
-
-    return personData.map((row) => {
-        const rowData: PersonData = {};
         headers.forEach((header) => {
             rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
         });
@@ -91,11 +78,16 @@ async function handleGetRequest(res: NextApiResponse<ResponseData<Record<string,
     try {
         const doc = await loadGoogleDoc();
         const sheetNames = ['노원명단', '회의참석', '말노정', '주일예배', '삼일예배', '십일조', '회비', '전도활동'];
-        const data: Record<string, UserRegistration[]> = {};
 
-        for (const sheetName of sheetNames) {
-            data[sheetName] = await getSheetData(doc, sheetName);
-        }
+        // 모든 시트를 병렬로 처리
+        const data: Record<string, UserRegistration[]> = Object.assign(
+            {},
+            ...(await Promise.all(
+                sheetNames.map(async (sheetName) => ({
+                    [sheetName]: await getSheetDataForType(doc, sheetName),
+                }))
+            ))
+        );
 
         res.status(200).json({ ok: true, data });
     } catch (error) {
@@ -113,17 +105,21 @@ async function handleGetRequestForPerson(
         const personName = req.query.name as string;
 
         if (!personName) {
-            res.status(400).json({ ok: false, error: 'Missing person name' });
-            return;
+            return res.status(400).json({ ok: false, error: 'Missing person name' });
         }
 
         const doc = await loadGoogleDoc();
         const sheetNames = ['회의참석', '말노정', '주일예배', '삼일예배', '십일조', '회비'];
 
-        const data: Record<string, PersonData[]> = {};
-        for (const sheetName of sheetNames) {
-            data[sheetName] = await getSheetDataForPerson(doc, sheetName, personName);
-        }
+        // 특정 사람의 시트를 병렬로 처리
+        const data: Record<string, PersonData[]> = Object.assign(
+            {},
+            ...(await Promise.all(
+                sheetNames.map(async (sheetName) => ({
+                    [sheetName]: await getSheetDataForType(doc, sheetName, personName),
+                }))
+            ))
+        );
 
         res.status(200).json({ ok: true, data });
     } catch (error) {
