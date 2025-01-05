@@ -11,7 +11,6 @@ type RowData = {
 export default function Home() {
     const [data, setData] = useState<RowData[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -22,10 +21,9 @@ export default function Home() {
                     console.log(json.data); // 전체 데이터 확인을 위한 로그 추가
                     setData(json.data['노원명단']); // '노원명단' 시트의 데이터만 가져옵니다
                 } else {
-                    setError(json.error || 'Failed to load data');
                 }
-            } catch (err) {
-                setError('An error occurred while fetching data');
+            } catch (error) {
+                console.error(error);
             } finally {
                 setLoading(false);
             }
@@ -35,7 +33,6 @@ export default function Home() {
     }, []);
 
     if (loading) return <p>Loading...</p>;
-    if (error) return <p>Error: {error}</p>;
 
     return (
         <div className="container mx-auto mt-10">

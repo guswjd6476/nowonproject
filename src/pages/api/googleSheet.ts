@@ -13,6 +13,10 @@ interface ResponseData<T = unknown> {
     error?: string;
 }
 
+interface PersonData {
+    [key: string]: string;
+}
+
 // Google Spreadsheet 초기화
 async function loadGoogleDoc(): Promise<GoogleSpreadsheet> {
     const formattedKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -21,7 +25,6 @@ async function loadGoogleDoc(): Promise<GoogleSpreadsheet> {
         throw new Error('Missing required environment variables for Google Sheets');
     }
 
-    // GoogleAuth 객체를 사용하여 인증 처리
     const auth = new GoogleAuth({
         credentials: {
             private_key: formattedKey,
@@ -30,18 +33,15 @@ async function loadGoogleDoc(): Promise<GoogleSpreadsheet> {
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
-    // 인증 클라이언트 생성
     const authClient = await auth.getClient();
 
-    // GoogleSpreadsheet 객체 생성 시 인증 클라이언트 전달
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, authClient); // 두 번째 인자로 인증 객체 전달
+    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, authClient);
 
-    // 시트 정보 로딩
     await doc.loadInfo();
     return doc;
 }
 
-// 시트 데이터 가져오기
+// 시트 데이터 가져오기 (전체 데이터)
 async function getSheetData(doc: GoogleSpreadsheet, sheetTitle: string): Promise<UserRegistration[]> {
     const sheet = doc.sheetsByTitle[sheetTitle];
     if (!sheet) throw new Error(`Sheet with title "${sheetTitle}" not found.`);
@@ -60,7 +60,11 @@ async function getSheetData(doc: GoogleSpreadsheet, sheetTitle: string): Promise
 }
 
 // 시트 데이터 가져오기 (특정 사람의 데이터)
-async function getSheetDataForPerson(doc: GoogleSpreadsheet, sheetTitle: string, personName: string): Promise<any> {
+async function getSheetDataForPerson(
+    doc: GoogleSpreadsheet,
+    sheetTitle: string,
+    personName: string
+): Promise<PersonData[]> {
     const sheet = doc.sheetsByTitle[sheetTitle];
     if (!sheet) throw new Error(`Sheet with title "${sheetTitle}" not found.`);
 
@@ -68,14 +72,13 @@ async function getSheetDataForPerson(doc: GoogleSpreadsheet, sheetTitle: string,
     const rows = await sheet.getRows();
     const headers = sheet.headerValues.map((header) => header.trim());
 
-    // 해당 사람의 데이터를 찾을 때 row.get()을 사용
     const personData = rows.filter((row) => {
-        const name = row.get('이름'); // '이름' 컬럼을 가져오기
+        const name = row.get('이름');
         return name === personName;
     });
 
     return personData.map((row) => {
-        const rowData: Record<string, string> = {};
+        const rowData: PersonData = {};
         headers.forEach((header) => {
             rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
         });
@@ -102,9 +105,12 @@ async function handleGetRequest(res: NextApiResponse<ResponseData<Record<string,
 }
 
 // 특정 사람의 데이터 요청 처리
-async function handleGetRequestForPerson(req: NextApiRequest, res: NextApiResponse<ResponseData<any>>) {
+async function handleGetRequestForPerson(
+    req: NextApiRequest,
+    res: NextApiResponse<ResponseData<Record<string, PersonData[]>>>
+) {
     try {
-        const personName = req.query.name as string; // URL에서 전달된 이름
+        const personName = req.query.name as string;
 
         if (!personName) {
             res.status(400).json({ ok: false, error: 'Missing person name' });
@@ -114,8 +120,7 @@ async function handleGetRequestForPerson(req: NextApiRequest, res: NextApiRespon
         const doc = await loadGoogleDoc();
         const sheetNames = ['회의참석', '말노정', '주일예배', '삼일예배', '십일조', '회비'];
 
-        // 각 시트에서 해당 사람의 정보를 가져옴
-        const data: Record<string, any[]> = {};
+        const data: Record<string, PersonData[]> = {};
         for (const sheetName of sheetNames) {
             data[sheetName] = await getSheetDataForPerson(doc, sheetName, personName);
         }
@@ -131,10 +136,8 @@ async function handleGetRequestForPerson(req: NextApiRequest, res: NextApiRespon
 export default async function googleSheet(req: NextApiRequest, res: NextApiResponse<ResponseData>) {
     if (req.method === 'GET') {
         if (req.query.name) {
-            // 특정 사람의 정보 요청
             await handleGetRequestForPerson(req, res);
         } else {
-            // 모든 사람 목록 요청
             await handleGetRequest(res);
         }
     } else {

@@ -11,7 +11,6 @@ const PersonDetailPage = () => {
     const { name } = router.query; // URL에서 이름을 가져옵니다
     const [personData, setPersonData] = useState<PersonData | null>(null); // PersonData 타입을 명시
     const [loading, setLoading] = useState<boolean>(true); // 로딩 상태 추가
-    const [error, setError] = useState<string | null>(null); // 에러 상태 추가
 
     useEffect(() => {
         if (name) {
@@ -22,10 +21,11 @@ const PersonDetailPage = () => {
                     if (data.ok) {
                         setPersonData(data.data); // 타입을 PersonData로 자동 추론
                     } else {
-                        setError(data.error || 'Failed to load person data');
+                        // Handle the error response if needed
                     }
-                } catch (err) {
-                    setError('An error occurred while fetching data');
+                } catch (error) {
+                    // You can log the error or handle it here if you need
+                    console.error(error);
                 } finally {
                     setLoading(false);
                 }
@@ -34,12 +34,10 @@ const PersonDetailPage = () => {
             fetchPersonData();
         } else {
             setLoading(false); // name이 없을 경우 로딩 종료
-            setError('No name provided');
         }
     }, [name]);
 
     if (loading) return <div className="text-center py-10 text-xl">Loading...</div>;
-    if (error) return <div className="text-center py-10 text-xl text-red-500">{error}</div>;
 
     return (
         <div className="container mx-auto p-6">
