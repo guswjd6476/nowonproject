@@ -16,7 +16,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 // 데이터 타입 정의
 interface PersonData {
-    [sheetName: string]: Array<Record<string, any>>;
+    [sheetName: string]: Array<Record<string, string | number>>; // 각 시트 이름에 대해 문자열 또는 숫자 값을 가질 수 있음
 }
 
 const TABS = [
@@ -89,7 +89,7 @@ const PersonDetailPage = () => {
         return Object.fromEntries(Object.entries(data).filter(([sheetName]) => filteredItems.includes(sheetName)));
     };
 
-    const getChartData = (data: Array<Record<string, any>>, sheetName: string) => {
+    const getChartData = (data: Array<Record<string, string | number>>, sheetName: string) => {
         const labels: string[] = [];
         const values: number[] = [];
 
@@ -99,9 +99,9 @@ const PersonDetailPage = () => {
                 if (/^\d{1,2}\/\d{1,2}$/.test(key) || /^[1-9]월|1[0-2]월$/.test(key)) {
                     labels.push(key);
                     if (sheetName === '주일예배' || sheetName === '삼일예배') {
-                        values.push(getScoreForService(sheetName, value));
+                        values.push(getScoreForService(sheetName, value as string)); // value가 문자열일 경우만 처리
                     } else {
-                        values.push(parseInt(value || '0', 10));
+                        values.push(parseInt((value as string) || '0', 10)); // 문자열을 숫자로 변환
                     }
                 }
             });
