@@ -77,7 +77,17 @@ async function getSheetDataForType(
 async function handleGetRequest(res: NextApiResponse<ResponseData<Record<string, UserRegistration[]>>>): Promise<void> {
     try {
         const doc = await loadGoogleDoc();
-        const sheetNames = ['노원명단', '회의참석', '말노정', '주일예배', '삼일예배', '십일조', '회비', '전도활동'];
+        const sheetNames = [
+            '노원명단',
+            '대회의',
+            '귀소',
+            '말노정',
+            '주일예배',
+            '삼일예배',
+            '십일조',
+            '회비',
+            '전도활동',
+        ];
 
         // 모든 시트를 병렬로 처리
         const data: Record<string, UserRegistration[]> = Object.assign(
@@ -109,7 +119,7 @@ async function handleGetRequestForPerson(
         }
 
         const doc = await loadGoogleDoc();
-        const sheetNames = ['회의참석', '말노정', '주일예배', '삼일예배', '십일조', '회비'];
+        const sheetNames = ['대회의', '귀소', '말노정', '주일예배', '삼일예배', '십일조', '회비', '전도활동'];
 
         // 특정 사람의 시트를 병렬로 처리
         const data: Record<string, PersonData[]> = Object.assign(
