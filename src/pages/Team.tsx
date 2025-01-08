@@ -9,6 +9,7 @@ import {
     Title,
     Tooltip,
     Legend,
+    ChartData,
 } from 'chart.js';
 
 // Chart.js 설정
@@ -32,10 +33,8 @@ type TeamParticipation = {
 };
 
 const Team = () => {
-    const [data, setData] = useState<Member[]>([]); // 데이터 상태
-    const [teamData, setTeamData] = useState<TeamParticipation[]>([]); // 팀별 참여율 데이터
     const [loading, setLoading] = useState<boolean>(true); // 로딩 상태
-    const [chartData, setChartData] = useState<any>(null); // 차트 데이터 상태
+    const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] }); // 차트 데이터 상태
     const [selectedCategory, setSelectedCategory] = useState<string>('귀소'); // 선택된 카테고리 상태
 
     useEffect(() => {
@@ -51,7 +50,7 @@ const Team = () => {
                 if (data.data && Array.isArray(data.data[selectedCategory])) {
                     const teamAttendanceByDate: TeamAttendanceByDate = {}; // 날짜별 팀별 참석 여부
 
-                    data.data[selectedCategory].forEach((entry: any) => {
+                    data.data[selectedCategory].forEach((entry: Member) => {
                         console.log('처리 중인 entry:', entry); // 각 entry 출력
                         const zone = entry.구역;
                         if (!zone) {
@@ -99,8 +98,6 @@ const Team = () => {
                             });
                         });
                     });
-
-                    setTeamData(calculatedTeamData);
 
                     // Check if the data is being calculated
                     console.log('calculatedTeamData:', calculatedTeamData); // 최종 계산된 데이터 출력
