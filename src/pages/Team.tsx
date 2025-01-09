@@ -99,13 +99,10 @@ const Team = () => {
                         });
                     });
 
-                    // Check if the data is being calculated
-                    console.log('calculatedTeamData:', calculatedTeamData); // 최종 계산된 데이터 출력
-
-                    // 차트 데이터 준비
-                    const dates = Object.keys(teamAttendanceByDate);
+                    // 날짜 리스트 만들기 (등록구분을 제외한 실제 날짜만)
+                    const dates = Object.keys(teamAttendanceByDate).filter((date) => date !== '등록구분');
                     if (dates.length === 0) {
-                        console.error('No dates found in teamAttendanceByDate');
+                        console.error('No valid dates found in teamAttendanceByDate');
                         return; // 날짜가 없으면 차트 생성을 중지
                     }
 
@@ -115,6 +112,14 @@ const Team = () => {
                         return; // 팀이 없으면 차트 생성을 중지
                     }
 
+                    // 팀별 색상을 고정값으로 지정
+                    const teamColors: { [key: string]: string } = {
+                        '1': 'red', // 1팀은 빨간색
+                        '2': 'blue', // 2팀은 파란색
+                        '3': 'yellow', // 3팀은 노란색
+                        '4': 'green', // 4팀은 초록색
+                    };
+
                     const datasets = teams.map((team) => {
                         const data = dates.map((date) => {
                             const teamAttendance = teamAttendanceByDate[date][team] || [];
@@ -123,17 +128,20 @@ const Team = () => {
                             return totalAttendances > 0 ? attendedCount / totalAttendances : 0;
                         });
 
+                        // 팀별 색상을 teamColors 객체에서 가져옴
+                        const borderColor = teamColors[team] || '#' + Math.floor(Math.random() * 16777215).toString(16); // 기본값은 랜덤 색상
+
                         return {
                             label: team,
                             data,
                             fill: false,
-                            borderColor: '#' + Math.floor(Math.random() * 16777215).toString(16), // 랜덤 색상
+                            borderColor, // 고정된 색상 적용
                             tension: 0.1,
                         };
                     });
 
                     setChartData({
-                        labels: dates,
+                        labels: dates, // 실제 날짜만 labels로 설정
                         datasets,
                     });
                 } else {
