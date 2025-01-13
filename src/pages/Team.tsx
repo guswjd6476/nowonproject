@@ -100,7 +100,7 @@ const Team = () => {
                     });
 
                     // 날짜 리스트 만들기 (등록구분을 제외한 실제 날짜만)
-                    const dates = Object.keys(teamAttendanceByDate).filter((date) => date !== '등록구분');
+                    const dates = Object.keys(teamAttendanceByDate).filter((date) => date !== 'ID');
                     if (dates.length === 0) {
                         console.error('No valid dates found in teamAttendanceByDate');
                         return; // 날짜가 없으면 차트 생성을 중지
