@@ -12,10 +12,21 @@ type RowData = {
     [key: string]: string | number; // 날짜별 값이 key로 들어오므로 동적으로 처리
 };
 
+type ChartData = {
+    [sheetName: string]: {
+        labels: string[]; // X축 라벨 (날짜)
+        datasets: {
+            label: string; // 데이터셋 이름
+            data: number[]; // 참석률 데이터
+            backgroundColor: string; // 배경색
+        }[];
+    };
+};
+
 export default function Region() {
     const [sheetsData, setSheetsData] = useState<{ [sheetName: string]: RowData[] }>({});
     const [loading, setLoading] = useState(true);
-    const [chartData, setChartData] = useState<{ [sheetName: string]: any }>({});
+    const [chartData, setChartData] = useState<ChartData>({}); // ChartData 타입으로 설정
 
     useEffect(() => {
         const fetchData = async () => {
@@ -45,7 +56,7 @@ export default function Region() {
 
     useEffect(() => {
         if (Object.keys(sheetsData).length > 0) {
-            const newChartData: { [sheetName: string]: any } = {};
+            const newChartData: ChartData = {}; // ChartData 타입 사용
 
             Object.entries(sheetsData).forEach(([sheetName, data]) => {
                 // 날짜별 데이터 그룹화
