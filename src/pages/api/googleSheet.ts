@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { GoogleAuth } from 'google-auth-library';
 
-// 타입 정의
 interface UserRegistration {
     [key: string]: string;
 }
@@ -13,11 +12,9 @@ interface ResponseData<T = unknown> {
     error?: string;
 }
 
-interface PersonData {
-    [key: string]: string;
-}
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Google Spreadsheet 초기화
 async function loadGoogleDoc(): Promise<GoogleSpreadsheet> {
     const formattedKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
     const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SHEET_ID } = process.env;
@@ -40,23 +37,31 @@ async function loadGoogleDoc(): Promise<GoogleSpreadsheet> {
     return doc;
 }
 
-// 공통 함수: 시트 데이터 가져오기
-async function getSheetDataForType(
-    doc: GoogleSpreadsheet,
-    sheetTitle: string,
-    personName?: string
-): Promise<UserRegistration[] | PersonData[]> {
-    const sheet = doc.sheetsByTitle[sheetTitle];
-    if (!sheet) throw new Error(`Sheet with title "${sheetTitle}" not found.`);
+async function getSheetData(doc: GoogleSpreadsheet, sheetTitle: string): Promise<Record<string, UserRegistration[]>> {
+    const allData: Record<string, UserRegistration[]> = {};
 
-    await sheet.loadHeaderRow();
-    const rows = await sheet.getRows();
-    const headers = sheet.headerValues.map((header) => header.trim());
+    if (sheetTitle === '전체') {
+        for (const sheet of doc.sheetsByIndex) {
+            const rows = await sheet.getRows();
+            const headers = sheet.headerValues.map((header) => header.trim());
+            const sheetData: UserRegistration[] = rows.map((row) => {
+                const rowData: UserRegistration = { 시트이름: sheet.title };
+                headers.forEach((header) => {
+                    rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
+                });
+                return rowData;
+            });
+            allData[sheet.title] = sheetData;
+        }
+    } else {
+        const sheet = doc.sheetsByTitle[sheetTitle];
+        if (!sheet) throw new Error(`Sheet with title "${sheetTitle}" not found.`);
+        await sheet.loadHeaderRow();
+        const rows = await sheet.getRows();
+        const headers = sheet.headerValues.map((header) => header.trim());
 
-    if (personName) {
-        const personData = rows.filter((row) => row.get('이름') === personName);
-        return personData.map((row) => {
-            const rowData: PersonData = {};
+        allData[sheet.title] = rows.map((row) => {
+            const rowData: UserRegistration = { 시트이름: sheet.title };
             headers.forEach((header) => {
                 rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
             });
@@ -64,87 +69,80 @@ async function getSheetDataForType(
         });
     }
 
-    return rows.map((row) => {
-        const rowData: UserRegistration = {};
-        headers.forEach((header) => {
-            rowData[header] = row.get(header) ? String(row.get(header)).trim() : '';
-        });
-        return rowData;
-    });
+    return allData;
 }
 
-// 모든 데이터 요청 처리
-async function handleGetRequest(res: NextApiResponse<ResponseData<Record<string, UserRegistration[]>>>): Promise<void> {
+async function getCachedData<T>(sheetTitle: string, fetchFunction: () => Promise<T>): Promise<T> {
+    const cacheKey = sheetTitle;
+    const now = Date.now();
+    const cached = cache.get(cacheKey);
+
+    if (cached && now - cached.timestamp < CACHE_DURATION) {
+        console.log(`Using cached data for key: ${cacheKey}`);
+        return cached.data as T;
+    }
+
+    console.log(`Fetching new data for key: ${cacheKey}`);
     try {
-        const doc = await loadGoogleDoc();
-        const sheetNames = [
-            '노원명단',
-            '대회의',
-            '귀소',
-            '말노정',
-            '주일예배',
-            '삼일예배',
-            '십일조',
-            '회비',
-            '전도활동',
-        ];
-
-        // 모든 시트를 병렬로 처리
-        const data: Record<string, UserRegistration[]> = Object.assign(
-            {},
-            ...(await Promise.all(
-                sheetNames.map(async (sheetName) => ({
-                    [sheetName]: await getSheetDataForType(doc, sheetName),
-                }))
-            ))
-        );
-
-        res.status(200).json({ ok: true, data });
+        const data = await fetchFunction();
+        cache.set(cacheKey, { data, timestamp: now });
+        return data;
     } catch (error) {
-        console.error('Error handling GET request:', error);
-        res.status(500).json({ ok: false, error: 'Failed to retrieve data from Google Sheets.' });
+        console.error('Error fetching new data:', error);
+        throw new Error('Failed to fetch new data');
     }
 }
 
-// 특정 사람의 데이터 요청 처리
-async function handleGetRequestForPerson(
-    req: NextApiRequest,
-    res: NextApiResponse<ResponseData<Record<string, PersonData[]>>>
-) {
-    try {
-        const personName = req.query.name as string;
-
-        if (!personName) {
-            return res.status(400).json({ ok: false, error: 'Missing person name' });
-        }
-
-        const doc = await loadGoogleDoc();
-        const sheetNames = ['대회의', '귀소', '말노정', '주일예배', '삼일예배', '십일조', '회비', '전도활동'];
-
-        // 특정 사람의 시트를 병렬로 처리
-        const data: Record<string, PersonData[]> = Object.assign(
-            {},
-            ...(await Promise.all(
-                sheetNames.map(async (sheetName) => ({
-                    [sheetName]: await getSheetDataForType(doc, sheetName, personName),
-                }))
-            ))
-        );
-
-        res.status(200).json({ ok: true, data });
-    } catch (error) {
-        console.error('Error handling GET request for person:', error);
-        res.status(500).json({ ok: false, error: 'Failed to retrieve data from Google Sheets.' });
-    }
-}
-
-// 메인 API 핸들러
 export default async function googleSheet(req: NextApiRequest, res: NextApiResponse<ResponseData>) {
     if (req.method === 'GET') {
-        if (req.query.name) {
-            await handleGetRequestForPerson(req, res);
-        } else {
-            await handleGetRequest(res);
+        try {
+            const { sheet, name } = req.query;
+
+            if (!sheet) {
+                return res.status(400).json({ ok: false, error: 'Missing "sheet" query parameter' });
+            }
+
+            const doc = await loadGoogleDoc();
+            const sheetName = String(sheet);
+
+            const data = await getCachedData(sheetName, async () => {
+                return getSheetData(doc, sheetName);
+            });
+
+            if (sheetName === '전체') {
+                const allSheetData: Record<string, UserRegistration[]> = {};
+
+                for (const sheetTitle in data) {
+                    if (data[sheetTitle]) {
+                        allSheetData[sheetTitle] = name
+                            ? data[sheetTitle].filter((row: UserRegistration) => row['이름'] === String(name))
+                            : data[sheetTitle];
+                    }
+                }
+
+                return res.status(200).json({ ok: true, data: allSheetData });
+            }
+
+            if (!data || Object.keys(data).length === 0 || !data[sheetName]) {
+                console.log(`No data found for sheet: ${sheetName}`);
+                return res.status(404).json({ ok: false, error: `No data found for sheet: ${sheetName}` });
+            }
+
+            const filteredData = name
+                ? data[sheetName]?.filter((row: UserRegistration) => row['이름'] === String(name))
+                : data[sheetName];
+
+            console.log('Filtered data:', filteredData);
+
+            if (!filteredData || filteredData.length === 0) {
+                console.log(`No data found for name: ${name}`);
+                return res.status(404).json({ ok: false, error: `No data found for name: ${name}` });
+            }
+
+            res.status(200).json({ ok: true, data: filteredData });
+        } catch (error) {
+            console.error('Error handling GET request:', error);
+            res.status(500).json({ ok: false, error: 'Failed to retrieve data from Google Sheets.' });
         }
     } else {
         res.setHeader('Allow', ['GET']);

@@ -11,14 +11,15 @@ export default function Home() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await fetch('/api/googleSheet');
+                const res = await fetch('/api/googleSheet?sheet=노원명단'); // '노원명단' 시트만 요청
                 const json = await res.json();
                 if (json.ok) {
-                    setData(json.data['노원명단']); // '노원명단' 시트의 데이터만 가져옵니다
+                    setData(json.data); // API 응답 데이터 설정
                 } else {
+                    console.error('Error fetching data:', json.error);
                 }
             } catch (error) {
-                console.error(error);
+                console.error('Error fetching data:', error);
             } finally {
                 setLoading(false);
             }
@@ -38,10 +39,7 @@ export default function Home() {
                         <tr>
                             {data.length > 0 &&
                                 Object.keys(data[0]).map((header) => (
-                                    <th
-                                        key={header}
-                                        className="border border-gray-300 px-4 py-2 text-sm sm:text-base"
-                                    >
+                                    <th key={header} className="border border-gray-300 px-4 py-2 text-sm sm:text-base">
                                         {header}
                                     </th>
                                 ))}
@@ -50,25 +48,19 @@ export default function Home() {
                     <tbody>
                         {data.map((row, index) => (
                             <tr key={index}>
-                                {Object.values(row).map((value, idx) => {
-                                    if (idx === 0) {
-                                        // 첫 번째 열인 '이름' 열을 클릭 가능한 링크로 만들기
+                                {Object.entries(row).map(([key, value]) => {
+                                    if (key === '이름') {
                                         return (
                                             <td
-                                                key={idx}
+                                                key={key}
                                                 className="border border-gray-300 px-4 py-2 text-blue-500 cursor-pointer text-sm sm:text-base"
                                             >
-                                                <Link href={`/DetailPage?name=${value}`}>
-                                                    <a>{value}</a> {/* 이름 클릭 시 해당 사람 페이지로 이동 */}
-                                                </Link>
+                                                <Link href={`/DetailPage?name=${value}`}>{value}</Link>
                                             </td>
                                         );
                                     }
                                     return (
-                                        <td
-                                            key={idx}
-                                            className="border border-gray-300 px-4 py-2 text-sm sm:text-base"
-                                        >
+                                        <td key={key} className="border border-gray-300 px-4 py-2 text-sm sm:text-base">
                                             {value}
                                         </td>
                                     );
