@@ -53,6 +53,7 @@ const Team = () => {
                                 (key) =>
                                     key !== '이름' &&
                                     key !== '구역' &&
+                                    key !== '구분' &&
                                     key !== '직책' &&
                                     key !== 'ID' &&
                                     key !== '시트이름' // Exclude unwanted fields
@@ -68,11 +69,24 @@ const Team = () => {
 
                 categoryData.forEach((entry) => {
                     const team = entry.구역?.split('-')[0];
-                    if (!team) return; // 구역이 없는 경우 건너뜀
+                    if (!team) return;
 
-                    // 날짜별 출석 처리
                     allDates.forEach((date) => {
-                        const attendance = entry[date] === '1' ? 1 : 0;
+                        let attendance = 0;
+
+                        if (selectedCategory === '말노정' || selectedCategory === '구역모임') {
+                            attendance = entry[date] === '1' ? 1 : 0;
+                        } else if (selectedCategory === '구역예배') {
+                            attendance = entry[date] === '본구역예배' ? 1 : 0;
+                        } else if (selectedCategory === '총특교' || selectedCategory === '지정교') {
+                            attendance = entry[date] === '미시청' ? 0 : 1;
+                        } else if (selectedCategory === '주일예배' || selectedCategory === '삼일예배') {
+                            const validTimes = ['8시', '정오', '오후 3:30:00', '19시', '20시', '21시'];
+                            attendance = validTimes.includes(entry[date]) ? 1 : 0;
+                        } else {
+                            attendance = entry[date] === '참석' ? 1 : 0;
+                        }
+
                         if (!teamAttendanceByDate[date]) teamAttendanceByDate[date] = {};
                         if (!teamAttendanceByDate[date][team]) teamAttendanceByDate[date][team] = [];
                         teamAttendanceByDate[date][team].push(attendance);
@@ -127,7 +141,19 @@ const Team = () => {
         <div className="p-4">
             <h1 className="text-2xl font-bold mb-4">팀별 참석률</h1>
             <div className="mb-4">
-                {['귀소', '대회의', '말노정', '십일조', '회비'].map((category) => (
+                {[
+                    '구역예배',
+                    '구역모임',
+                    '총특교',
+                    '지정교',
+                    '말노정',
+                    '대회의',
+                    '귀소',
+                    '주일예배',
+                    '삼일예배',
+                    '십일조',
+                    '회비',
+                ].map((category) => (
                     <button
                         key={category}
                         className={`px-4 py-2 text-white rounded-md mr-2 ${
