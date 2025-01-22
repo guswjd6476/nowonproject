@@ -26,9 +26,11 @@ interface PersonData {
 
 const TABS = [
     { name: '전체', items: [] },
+    { name: '구역운영', items: ['구역예배', '구역모임'] },
     { name: '회의', items: ['귀소', '대회의'] },
     { name: '헌금', items: ['십일조', '회비'] },
     { name: '예배', items: ['주일예배', '삼일예배'] },
+    { name: '교육', items: ['총특교', '말노정', '지정교'] },
     { name: '전도활동', items: ['전도활동'] },
 ];
 
@@ -38,49 +40,80 @@ const getScoreForService = (serviceType: string, value: string): number => {
         주일예배: {
             '8시': 4,
             정오: 4,
-            '15시': 4,
+            '오후 3:30:00': 4,
             '19시': 4,
             '대체(대면)': 3,
+            '당일 외 대면': 3,
+            형제교회: 3,
+            선교교회: 3,
             '대체(비대면)': 2,
-            '문자(전화)': 1,
+            '대면 그외': 2,
+            문자및전화: 1,
         },
         삼일예배: {
             정오: 4,
             '20시': 4,
             '21시': 4,
             '대체(대면)': 3,
+            선교교회: 3,
+            형제교회: 3,
+            '당일 외 대면': 3,
+            '대면 그외': 2,
             '대체(비대면)': 2,
-            '문자(전화)': 1,
+            문자및전화: 1,
         },
     };
 
     return scores[serviceType]?.[value] || 0;
 };
+const getScoreForMeeting = (meetingType: string, value: string): number => {
+    if (meetingType === '귀소' || meetingType === '대회의') {
+        return value.startsWith('불참') ? 0 : 1;
+    }
+    if (meetingType === '구역예배') {
+        return value === '본구역예배' ? 1 : 0; // 본구역예배 = 참석, 그 외 = 불참
+    }
+    if (meetingType === '구역모임') {
+        return value === '1' ? 1 : 0; // 값이 1이면 참석, 0이면 불참
+    }
+    if (meetingType === '총특교' || meetingType === '지정교') {
+        const scores: Record<string, number> = {
+            시청: 3,
+            카드뉴스: 2,
+            미시청: 0,
+        };
+        return scores[value] || 0;
+    }
+    if (meetingType === '말노정') {
+        return value === '1' ? 1 : 0; // 1이면 참석, 0이면 불참
+    }
+    return 0; // 기본 값
+};
 
-const getChartData = (
-    data: SheetData[] | SheetData, // data가 배열일 수도 있고, 객체일 수도 있음
-    sheetName: string
-) => {
+const getChartData = (data: SheetData[] | SheetData, sheetName: string) => {
     const labels: string[] = [];
     const values: number[] = [];
 
-    // data가 배열이 아닌 경우 배열로 감싸서 처리
     const dataArray = Array.isArray(data) ? data : [data];
 
-    // 배열을 순회하면서 데이터 처리
     dataArray.forEach((item) => {
         const sheetTitle = item.시트이름;
 
-        // 각 객체에 대해 날짜와 월을 처리
         Object.entries(item).forEach(([key, value]) => {
             if (key !== '시트이름' && (/\d{1,2}\/\d{1,2}$/.test(key) || /^[1-9]월|1[0-2]월$/.test(key))) {
                 labels.push(key);
 
                 if (sheetTitle === '주일예배' || sheetTitle === '삼일예배') {
-                    // 예배 관련 데이터일 경우
                     values.push(getScoreForService(sheetTitle, value as string));
+                } else if (
+                    sheetTitle === '귀소' ||
+                    sheetTitle === '대회의' ||
+                    sheetTitle === '구역예배' ||
+                    sheetTitle === '구역모임' ||
+                    sheetTitle === '말노정'
+                ) {
+                    values.push(getScoreForMeeting(sheetTitle, value as string));
                 } else {
-                    // 그 외의 데이터는 숫자로 변환
                     values.push(parseInt((value as string) || '0', 10));
                 }
             }
@@ -179,12 +212,43 @@ const PersonDetailPage = () => {
                                 <div className="mt-6">
                                     <h3 className="text-lg font-bold text-gray-700 mb-3">그래프</h3>
                                     <Line
-                                        data={getChartData(data, sheetName)} // sheetName을 직접 사용
+                                        data={getChartData(data, sheetName)}
                                         options={{
                                             responsive: true,
                                             plugins: {
                                                 legend: { position: 'top' },
-                                                title: { display: true, text: `${sheetName} 점수 그래프` },
+                                                title: { display: true, text: `${sheetName} 그래프` },
+                                            },
+                                            scales: {
+                                                y: {
+                                                    min:
+                                                        sheetName === '귀소' ||
+                                                        sheetName === '대회의' ||
+                                                        sheetName === '구역예배' ||
+                                                        sheetName === '구역모임' ||
+                                                        sheetName === '말노정'
+                                                            ? 0
+                                                            : undefined,
+                                                    max:
+                                                        sheetName === '귀소' ||
+                                                        sheetName === '대회의' ||
+                                                        sheetName === '구역예배' ||
+                                                        sheetName === '구역모임' ||
+                                                        sheetName === '말노정'
+                                                            ? 1
+                                                            : undefined,
+                                                    ticks:
+                                                        sheetName === '귀소' ||
+                                                        sheetName === '대회의' ||
+                                                        sheetName === '구역예배' ||
+                                                        sheetName === '구역모임' ||
+                                                        sheetName === '말노정'
+                                                            ? {
+                                                                  stepSize: 1,
+                                                                  callback: (value) => (value === 1 ? '참석' : '불참'),
+                                                              }
+                                                            : undefined,
+                                                },
                                             },
                                         }}
                                     />
