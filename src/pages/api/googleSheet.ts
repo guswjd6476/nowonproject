@@ -78,7 +78,6 @@ async function getCachedData<T>(sheetTitle: string, fetchFunction: () => Promise
     const cached = cache.get(cacheKey);
 
     if (cached && now - cached.timestamp < CACHE_DURATION) {
-        console.log(`Using cached data for key: ${cacheKey}`);
         return cached.data as T;
     }
 
@@ -124,7 +123,6 @@ export default async function googleSheet(req: NextApiRequest, res: NextApiRespo
             }
 
             if (!data || Object.keys(data).length === 0 || !data[sheetName]) {
-                console.log(`No data found for sheet: ${sheetName}`);
                 return res.status(404).json({ ok: false, error: `No data found for sheet: ${sheetName}` });
             }
 
@@ -132,10 +130,7 @@ export default async function googleSheet(req: NextApiRequest, res: NextApiRespo
                 ? data[sheetName]?.filter((row: UserRegistration) => row['이름'] === String(name))
                 : data[sheetName];
 
-            console.log('Filtered data:', filteredData);
-
             if (!filteredData || filteredData.length === 0) {
-                console.log(`No data found for name: ${name}`);
                 return res.status(404).json({ ok: false, error: `No data found for name: ${name}` });
             }
 

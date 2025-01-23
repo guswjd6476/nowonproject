@@ -34,10 +34,10 @@ export default function App({ Component, pageProps }: AppProps) {
                         </Link>
                     </li>
                     <li>
-                        <Link href="/Zones">
+                        <Link href="/Groups">
                             <span
                                 className={`block p-2 rounded ${
-                                    router.pathname === '/Region' ? 'bg-gray-700' : 'hover:bg-gray-600'
+                                    router.pathname === '/Groups' ? 'bg-gray-700' : 'hover:bg-gray-600'
                                 }`}
                             >
                                 구역별 분석

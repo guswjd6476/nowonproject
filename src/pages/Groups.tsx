@@ -47,13 +47,14 @@ const getScoreForMeeting = (meetingType: string, value: string): number => {
     return attendance;
 };
 
-const Zones = () => {
+const Groups = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] });
-    const [selectedCategory, setSelectedCategory] = useState<string>('귀소');
+    const [selectedCategory, setSelectedCategory] = useState<string>('구역예배');
     const [selectedZone, setSelectedZone] = useState<string | null>(null);
     const [subZones, setSubZones] = useState<string[]>([]);
     const [selectedSubZone, setSelectedSubZone] = useState<string | null>(null);
+    const [showMembers, setShowMembers] = useState<boolean>(false); // 멤버별 참석 여부 표시 여부
 
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
@@ -68,6 +69,7 @@ const Zones = () => {
 
                 const categoryData: Member[] = json.data;
                 const teamAttendanceByDate: TeamAttendanceByDate = {};
+                const memberAttendanceByDate: Record<string, Record<string, number[]>> = {};
 
                 const allDates = Array.from(
                     new Set(
@@ -82,17 +84,25 @@ const Zones = () => {
                 categoryData.forEach((entry) => {
                     const team = entry.구역?.split('-')[0];
                     const subZone = entry.구역;
+                    const memberName = entry.이름;
 
                     if (!team || !subZone) return;
 
+                    // 구역별 참석 여부 계산
                     allDates.forEach((date) => {
                         const attendance = getScoreForMeeting(selectedCategory, entry[date]);
                         if (!teamAttendanceByDate[date]) teamAttendanceByDate[date] = {};
                         if (!teamAttendanceByDate[date][subZone]) teamAttendanceByDate[date][subZone] = [];
                         teamAttendanceByDate[date][subZone].push(attendance);
+
+                        // 멤버별 참석 여부 계산
+                        if (!memberAttendanceByDate[date]) memberAttendanceByDate[date] = {};
+                        if (!memberAttendanceByDate[date][memberName]) memberAttendanceByDate[date][memberName] = [];
+                        memberAttendanceByDate[date][memberName].push(attendance);
                     });
                 });
 
+                // 선택된 구역에 해당하는 서브존 필터링
                 const filteredZones = selectedZone
                     ? Object.keys(teamAttendanceByDate[allDates[0]] || {}).filter((subZone) =>
                           subZone.startsWith(selectedZone)
@@ -101,25 +111,44 @@ const Zones = () => {
 
                 setSubZones(filteredZones);
 
-                const datasets = (selectedSubZone ? [selectedSubZone] : filteredZones).map((zone) => {
-                    const zoneMembers = categoryData.filter((entry) => entry.구역 === zone).length; // 구역의 총 인원 수
-                    return {
-                        label: zone,
-                        data: allDates.map((date) => {
-                            const attendanceValues = teamAttendanceByDate[date]?.[zone] || [];
-                            const totalAttendances = attendanceValues.length;
-                            const attendedCount = attendanceValues.reduce((acc, val) => acc + val, 0);
-                            return totalAttendances > 0 ? attendedCount / zoneMembers : 0; // 총 인원 수로 나누어 참석률 계산
-                        }),
-                        borderColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
-                        fill: false,
-                        tension: 0.1,
-                    };
-                });
+                // 데이터셋 설정: 멤버별 참석률을 표시하는 경우, 선택된 구역에 속한 멤버들만 필터링
+                const datasets = showMembers
+                    ? Object.keys(memberAttendanceByDate[allDates[0]] || {}).map((member) => {
+                          const memberInSubZone =
+                              selectedSubZone &&
+                              categoryData.some((entry) => entry.구역 === selectedSubZone && entry.이름 === member);
+                          if (!memberInSubZone) return null; // 해당 구역의 멤버가 아니면 제외
+                          return {
+                              label: member,
+                              data: allDates.map((date) => {
+                                  const attendanceValues = memberAttendanceByDate[date]?.[member] || [];
+                                  const attendedCount = attendanceValues.reduce((acc, val) => acc + val, 0);
+                                  return attendanceValues.length > 0 ? attendedCount : 0; // 참석 횟수 계산
+                              }),
+                              borderColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
+                              fill: false,
+                              tension: 0.1,
+                          };
+                      })
+                    : (selectedSubZone ? [selectedSubZone] : filteredZones).map((zone) => {
+                          const zoneMembers = categoryData.filter((entry) => entry.구역 === zone).length; // 구역의 총 인원 수
+                          return {
+                              label: zone,
+                              data: allDates.map((date) => {
+                                  const attendanceValues = teamAttendanceByDate[date]?.[zone] || [];
+                                  const totalAttendances = attendanceValues.length;
+                                  const attendedCount = attendanceValues.reduce((acc, val) => acc + val, 0);
+                                  return totalAttendances > 0 ? attendedCount / zoneMembers : 0; // 총 인원 수로 나누어 참석률 계산
+                              }),
+                              borderColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
+                              fill: false,
+                              tension: 0.1,
+                          };
+                      });
 
                 setChartData({
                     labels: allDates,
-                    datasets,
+                    datasets: datasets.filter((dataset) => dataset !== null), // null 값 제거
                 });
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -129,7 +158,7 @@ const Zones = () => {
         };
 
         fetchAndCalculateParticipation();
-    }, [selectedCategory, selectedZone, selectedSubZone]);
+    }, [selectedCategory, selectedZone, selectedSubZone, showMembers]);
 
     if (loading) {
         return <div>Loading...</div>;
@@ -161,8 +190,9 @@ const Zones = () => {
                             selectedZone === zone ? 'bg-green-600' : 'bg-green-500 hover:bg-green-600'
                         }`}
                         onClick={() => {
-                            setSelectedZone(selectedZone === zone ? null : zone);
-                            setSelectedSubZone(null);
+                            setSelectedZone(zone); // 구역 선택
+                            setSelectedSubZone(null); // 서브존 선택 초기화
+                            setShowMembers(false); // 멤버별로 표시 안 함
                         }}
                     >
                         {zone}팀
@@ -175,7 +205,7 @@ const Zones = () => {
                         className={`px-4 py-2 text-white rounded-md mr-2 ${
                             selectedSubZone === null ? 'bg-yellow-600' : 'bg-yellow-500 hover:bg-yellow-600'
                         }`}
-                        onClick={() => setSelectedSubZone(null)}
+                        onClick={() => setSelectedSubZone(null)} // 전체 구역을 표시하려면 null 설정
                     >
                         전체
                     </button>
@@ -185,7 +215,10 @@ const Zones = () => {
                             className={`px-4 py-2 text-white rounded-md mr-2 ${
                                 selectedSubZone === subZone ? 'bg-yellow-600' : 'bg-yellow-500 hover:bg-yellow-600'
                             }`}
-                            onClick={() => setSelectedSubZone(subZone)}
+                            onClick={() => {
+                                setSelectedSubZone(subZone);
+                                setShowMembers(true); // 멤버별 참석률 표시
+                            }}
                         >
                             {subZone}
                         </button>
@@ -200,7 +233,9 @@ const Zones = () => {
                         plugins: {
                             title: {
                                 display: true,
-                                text: selectedSubZone
+                                text: showMembers
+                                    ? `${selectedSubZone} 멤버별 참석`
+                                    : selectedSubZone
                                     ? `${selectedSubZone} 참석률`
                                     : selectedZone
                                     ? `${selectedZone}팀 전체 참석률`
@@ -221,12 +256,15 @@ const Zones = () => {
                             y: {
                                 title: {
                                     display: true,
-                                    text: '참석률 (%)',
+                                    text: '참석률',
                                 },
-                                min: 0,
-                                max: 1,
                                 ticks: {
-                                    callback: (value) => `${(value as number) * 100}%`,
+                                    callback: (tickValue: string | number) => {
+                                        if (typeof tickValue === 'number') {
+                                            return `${Math.round(tickValue * 100)}%`;
+                                        }
+                                        return tickValue; // string인 경우 그대로 반환
+                                    },
                                 },
                             },
                         },
@@ -237,4 +275,4 @@ const Zones = () => {
     );
 };
 
-export default Zones;
+export default Groups;

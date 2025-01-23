@@ -29,7 +29,7 @@ type TeamAttendanceByDate = {
 const Team = () => {
     const [loading, setLoading] = useState<boolean>(true); // 로딩 상태
     const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] }); // 차트 데이터 상태
-    const [selectedCategory, setSelectedCategory] = useState<string>('귀소'); // 선택된 카테고리 상태
+    const [selectedCategory, setSelectedCategory] = useState<string>('구역예배'); // 선택된 카테고리 상태
 
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
