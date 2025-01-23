@@ -10,6 +10,7 @@ import {
     Tooltip,
     Legend,
     ChartData,
+    ChartDataset,
 } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -111,14 +112,13 @@ const Groups = () => {
 
                 setSubZones(filteredZones);
 
-                // 데이터셋 설정: 멤버별 참석률을 표시하는 경우, 선택된 구역에 속한 멤버들만 필터링
                 const datasets = showMembers
-                    ? Object.keys(memberAttendanceByDate[allDates[0]] || {}).map((member) => {
+                    ? Object.keys(memberAttendanceByDate[allDates[0]] || {}).reduce((acc, member) => {
                           const memberInSubZone =
                               selectedSubZone &&
                               categoryData.some((entry) => entry.구역 === selectedSubZone && entry.이름 === member);
-                          if (!memberInSubZone) return null; // 해당 구역의 멤버가 아니면 제외
-                          return {
+                          if (!memberInSubZone) return acc; // 해당 구역의 멤버가 아니면 제외
+                          acc.push({
                               label: member,
                               data: allDates.map((date) => {
                                   const attendanceValues = memberAttendanceByDate[date]?.[member] || [];
@@ -128,8 +128,9 @@ const Groups = () => {
                               borderColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
                               fill: false,
                               tension: 0.1,
-                          };
-                      })
+                          });
+                          return acc;
+                      }, [] as ChartData<'line'>['datasets'])
                     : (selectedSubZone ? [selectedSubZone] : filteredZones).map((zone) => {
                           const zoneMembers = categoryData.filter((entry) => entry.구역 === zone).length; // 구역의 총 인원 수
                           return {
@@ -148,7 +149,7 @@ const Groups = () => {
 
                 setChartData({
                     labels: allDates,
-                    datasets: datasets.filter((dataset) => dataset !== null), // null 값 제거
+                    datasets: datasets as ChartDataset<'line', number[]>[], // 타입 명시적으로 지정
                 });
             } catch (error) {
                 console.error('Error fetching data:', error);

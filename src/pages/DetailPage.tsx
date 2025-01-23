@@ -25,7 +25,23 @@ interface PersonData {
 }
 
 const TABS = [
-    { name: '전체', items: [] },
+    {
+        name: '전체',
+        items: [
+            '구역예배',
+            '구역모임',
+            '귀소',
+            '대회의',
+            '십일조',
+            '회비',
+            '주일예배',
+            '삼일예배',
+            '총특교',
+            '말노정',
+            '지정교',
+            '전도활동',
+        ],
+    },
     { name: '구역운영', items: ['구역예배', '구역모임'] },
     { name: '회의', items: ['귀소', '대회의'] },
     { name: '헌금', items: ['십일조', '회비'] },
@@ -38,29 +54,29 @@ const TABS = [
 const getScoreForService = (serviceType: string, value: string): number => {
     const scores: Record<string, Record<string, number>> = {
         주일예배: {
-            '8시': 4,
-            정오: 4,
-            '오후 3:30:00': 4,
-            '19시': 4,
-            '대체(대면)': 3,
-            '당일 외 대면': 3,
+            '8시': 3,
+            정오: 3,
+            '오후 3:30:00': 3,
+            '19시': 3,
+            '대체(대면)': 2,
+            '당일 외 대면': 2,
             형제교회: 3,
             선교교회: 3,
-            '대체(비대면)': 2,
-            '대면 그외': 2,
-            문자및전화: 1,
+            '대체(비대면)': 1,
+            '대면 그외': 1,
+            문자및전화: 0,
         },
         삼일예배: {
-            정오: 4,
-            '20시': 4,
-            '21시': 4,
-            '대체(대면)': 3,
+            정오: 3,
+            '20시': 3,
+            '21시': 3,
+            '대체(대면)': 2,
             선교교회: 3,
             형제교회: 3,
-            '당일 외 대면': 3,
-            '대면 그외': 2,
-            '대체(비대면)': 2,
-            문자및전화: 1,
+            '당일 외 대면': 2,
+            '대면 그외': 1,
+            '대체(비대면)': 1,
+            문자및전화: 0,
         },
     };
 
@@ -69,22 +85,18 @@ const getScoreForService = (serviceType: string, value: string): number => {
 const getScoreForMeeting = (meetingType: string, value: string): number => {
     if (meetingType === '귀소' || meetingType === '대회의') {
         return value.startsWith('불참') ? 0 : 1;
-    }
-    if (meetingType === '구역예배') {
+    } else if (meetingType === '구역예배') {
         return value === '본구역예배' ? 1 : 0; // 본구역예배 = 참석, 그 외 = 불참
-    }
-    if (meetingType === '구역모임') {
+    } else if (meetingType === '구역모임') {
         return value === '1' ? 1 : 0; // 값이 1이면 참석, 0이면 불참
-    }
-    if (meetingType === '총특교' || meetingType === '지정교') {
+    } else if (meetingType === '총특교' || meetingType === '지정교') {
         const scores: Record<string, number> = {
-            시청: 3,
-            카드뉴스: 2,
+            시청: 2,
+            카드뉴스: 1,
             미시청: 0,
         };
-        return scores[value] || 0;
-    }
-    if (meetingType === '말노정') {
+        return scores[value] !== undefined ? scores[value] : 0; // 정의되지 않은 값은 기본적으로 0
+    } else if (meetingType === '말노정') {
         return value === '1' ? 1 : 0; // 1이면 참석, 0이면 불참
     }
     return 0; // 기본 값
@@ -97,24 +109,17 @@ const getChartData = (data: SheetData[] | SheetData, sheetName: string) => {
     const dataArray = Array.isArray(data) ? data : [data];
 
     dataArray.forEach((item) => {
-        const sheetTitle = item.시트이름;
+        if (!item || !item.시트이름) return; // 데이터 유효성 검사
 
         Object.entries(item).forEach(([key, value]) => {
             if (key !== '시트이름' && (/\d{1,2}\/\d{1,2}$/.test(key) || /^[1-9]월|1[0-2]월$/.test(key))) {
                 labels.push(key);
 
-                if (sheetTitle === '주일예배' || sheetTitle === '삼일예배') {
-                    values.push(getScoreForService(sheetTitle, value as string));
-                } else if (
-                    sheetTitle === '귀소' ||
-                    sheetTitle === '대회의' ||
-                    sheetTitle === '구역예배' ||
-                    sheetTitle === '구역모임' ||
-                    sheetTitle === '말노정'
-                ) {
-                    values.push(getScoreForMeeting(sheetTitle, value as string));
+                // 점수 계산 통일화
+                if (['주일예배', '삼일예배'].includes(sheetName)) {
+                    values.push(getScoreForService(sheetName, value as string));
                 } else {
-                    values.push(parseInt((value as string) || '0', 10));
+                    values.push(getScoreForMeeting(sheetName, value as string));
                 }
             }
         });
@@ -145,12 +150,25 @@ const PersonDetailPage = () => {
         if (name && selectedTab) {
             const fetchPersonData = async () => {
                 try {
-                    const res = await fetch(`/api/googleSheet?name=${name}&sheet=${selectedTab}`);
-                    const data = await res.json();
+                    // 선택된 탭에 맞는 시트 목록 가져오기
+                    const selectedTabItems = TABS.find((tab) => tab.name === selectedTab)?.items || [];
 
-                    if (data.ok) {
-                        setPersonData(data.data);
-                    }
+                    // 여러 시트 데이터를 한번에 요청
+                    const promises = selectedTabItems.map(async (sheetName) => {
+                        const res = await fetch(`/api/googleSheet?name=${name}&sheet=${sheetName}`);
+                        const data = await res.json();
+                        return { sheetName, data: data.data };
+                    });
+
+                    const sheetData = await Promise.all(promises);
+
+                    // 각 시트의 데이터를 합침
+                    const mergedData: PersonData = sheetData.reduce((acc, { sheetName, data }) => {
+                        acc[sheetName] = data;
+                        return acc;
+                    }, {} as PersonData);
+
+                    setPersonData(mergedData);
                 } catch (error) {
                     console.error('데이터 로딩 실패:', error);
                 } finally {
@@ -162,14 +180,13 @@ const PersonDetailPage = () => {
         } else {
             setLoading(false);
         }
-    }, [name, selectedTab]); // selectedTab을 의존성 배열에 추가
+    }, [name, selectedTab]);
 
-    // selectedTab에 맞는 데이터만 필터링하여 재렌더링
     const filteredData =
-        selectedTab === '전체' || !personData
-            ? personData
+        selectedTab === '전체'
+            ? personData // 전체 탭일 때는 모든 데이터를 그대로 사용
             : Object.fromEntries(
-                  Object.entries(personData).filter(([sheetName]) =>
+                  Object.entries(personData || {}).filter(([sheetName]) =>
                       TABS.find((tab) => tab.name === selectedTab)?.items.includes(sheetName)
                   )
               );
@@ -199,14 +216,15 @@ const PersonDetailPage = () => {
             </div>
 
             <div className="space-y-6">
-                {/* null 체크 추가 */}
                 {filteredData &&
                     Object.entries(filteredData).map(([sheetName, data]) => {
-                        // "노원명단" 시트는 제외
                         if (sheetName === '노원명단') return null;
 
                         return (
-                            <div key={sheetName} className="bg-white p-4 rounded-lg shadow-md">
+                            <div
+                                key={sheetName}
+                                className="bg-white p-4 rounded-lg shadow-md"
+                            >
                                 <h2 className="text-2xl font-semibold text-gray-800 mb-4">{sheetName}</h2>
 
                                 <div className="mt-6">
@@ -216,7 +234,7 @@ const PersonDetailPage = () => {
                                         options={{
                                             responsive: true,
                                             plugins: {
-                                                legend: { position: 'top' },
+                                                legend: { position: 'top' as const }, // Using 'as const' ensures it's recognized as a valid literal type
                                                 title: { display: true, text: `${sheetName} 그래프` },
                                             },
                                             scales: {
@@ -226,7 +244,11 @@ const PersonDetailPage = () => {
                                                         sheetName === '대회의' ||
                                                         sheetName === '구역예배' ||
                                                         sheetName === '구역모임' ||
-                                                        sheetName === '말노정'
+                                                        sheetName === '말노정' ||
+                                                        sheetName === '총특교' ||
+                                                        sheetName === '지정교' ||
+                                                        sheetName === '주일예배' ||
+                                                        sheetName === '삼일예배'
                                                             ? 0
                                                             : undefined,
                                                     max:
@@ -236,6 +258,10 @@ const PersonDetailPage = () => {
                                                         sheetName === '구역모임' ||
                                                         sheetName === '말노정'
                                                             ? 1
+                                                            : sheetName === '총특교' || sheetName === '지정교'
+                                                            ? 2
+                                                            : sheetName === '주일예배' || sheetName === '삼일예배'
+                                                            ? 3
                                                             : undefined,
                                                     ticks:
                                                         sheetName === '귀소' ||
@@ -246,6 +272,28 @@ const PersonDetailPage = () => {
                                                             ? {
                                                                   stepSize: 1,
                                                                   callback: (value) => (value === 1 ? '참석' : '불참'),
+                                                              }
+                                                            : sheetName === '총특교' || sheetName === '지정교'
+                                                            ? {
+                                                                  stepSize: 1,
+                                                                  callback: (value) =>
+                                                                      value === 2
+                                                                          ? '시청'
+                                                                          : value === 1
+                                                                          ? '카드뉴스'
+                                                                          : '미시청',
+                                                              }
+                                                            : sheetName === '주일예배' || sheetName === '삼일예배'
+                                                            ? {
+                                                                  stepSize: 1,
+                                                                  callback: (value) =>
+                                                                      value === 3
+                                                                          ? '대면예배'
+                                                                          : value === 0
+                                                                          ? '문자및전화'
+                                                                          : value === 1
+                                                                          ? '대체(비대면)'
+                                                                          : '대체(대면)',
                                                               }
                                                             : undefined,
                                                 },

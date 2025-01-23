@@ -153,6 +153,7 @@ const Team = () => {
                     '삼일예배',
                     '십일조',
                     '회비',
+                    '전도활동',
                 ].map((category) => (
                     <button
                         key={category}
