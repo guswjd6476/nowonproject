@@ -81,7 +81,17 @@ const Team = () => {
                         } else if (selectedCategory === '총특교' || selectedCategory === '지정교') {
                             attendance = entry[date] === '미시청' ? 0 : 1;
                         } else if (selectedCategory === '주일예배' || selectedCategory === '삼일예배') {
-                            const validTimes = ['8시', '정오', '오후 3:30:00', '19시', '20시', '21시'];
+                            const validTimes = [
+                                '선교교회',
+                                '형제교회',
+                                '당일 외 대면',
+                                '8시',
+                                '정오',
+                                '오후 3:30:00',
+                                '19시',
+                                '20시',
+                                '21시',
+                            ];
                             attendance = validTimes.includes(entry[date]) ? 1 : 0;
                         } else {
                             attendance = entry[date] === '참석' ? 1 : 0;

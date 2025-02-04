@@ -1,125 +1,217 @@
 import { useEffect, useState } from 'react';
-import { Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Line } from 'react-chartjs-2';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend,
+    ChartData,
+} from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-type RowData = {
-    경적: string;
-    구역: string;
+type Member = {
     이름: string;
+    구역: string;
     직책: string;
-    [key: string]: string | number; // 날짜별 값이 key로 들어오니를 동적으로 처리
+    [key: string]: string; // 날짜별 출석 정보 포함
 };
 
-type ChartData = {
-    labels: string[]; // X축 라벨 (날짜)
-    datasets: {
-        label: string; // 데이터셋 이름
-        data: number[]; // 참석률 데이터
-        backgroundColor: string; // 배경색
-    }[];
+type AttendanceByDate = {
+    [date: string]: number[]; // 날짜별 참석 여부를 저장
 };
 
-export default function Region() {
-    const [sheetsData, setSheetsData] = useState<{ [sheetName: string]: RowData[] }>({});
-    const [loading, setLoading] = useState(true);
-    const [chartData, setChartData] = useState<ChartData | null>(null); // ChartData 타입으로 설정
+const Region = () => {
+    const [loading, setLoading] = useState<boolean>(true); // 로딩 상태
+    const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] }); // 차트 데이터 상태
+    const [selectedCategory, setSelectedCategory] = useState<string>('구역예배'); // 선택된 카테고리 상태
 
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchAndCalculateParticipation = async () => {
             try {
-                const res = await fetch('/api/googleSheet');
+                const res = await fetch(`/api/googleSheet?sheet=${selectedCategory}`);
                 const json = await res.json();
-                if (json.ok) {
-                    // json.data의 타입을 강제 캐스트
-                    const filteredData = Object.fromEntries(
-                        Object.entries(json.data as { [sheetName: string]: RowData[] }) // 타입 캐스트
-                            .filter(([sheetName]) => sheetName !== '노원명단')
-                    );
 
-                    setSheetsData(filteredData); // 필터링된 데이터 저장
+                if (!json.ok || !json.data) {
+                    console.error('Invalid data structure:', json);
+                    return;
                 }
+
+                const categoryData: Member[] = json.data;
+                const attendanceByDate: AttendanceByDate = {};
+
+                // 날짜 리스트 추출
+                const allDates = Array.from(
+                    new Set(
+                        categoryData.flatMap((entry) =>
+                            Object.keys(entry).filter(
+                                (key) =>
+                                    key !== '이름' &&
+                                    key !== '구역' &&
+                                    key !== '구분' &&
+                                    key !== '직책' &&
+                                    key !== 'ID' &&
+                                    key !== '시트이름' // Exclude unwanted fields
+                            )
+                        )
+                    )
+                ).sort((a, b) => {
+                    // 날짜 형식으로 정렬
+                    const dateA = new Date(a);
+                    const dateB = new Date(b);
+                    return dateA.getTime() - dateB.getTime();
+                });
+
+                categoryData.forEach((entry) => {
+                    allDates.forEach((date) => {
+                        let attendance = 0;
+
+                        if (selectedCategory === '말노정' || selectedCategory === '구역모임') {
+                            attendance = entry[date] === '1' ? 1 : 0;
+                        } else if (selectedCategory === '구역예배') {
+                            attendance = entry[date] === '본구역예배' ? 1 : 0;
+                        } else if (selectedCategory === '총특교' || selectedCategory === '지정교') {
+                            attendance = entry[date] === '미시청' ? 0 : 1;
+                        } else if (selectedCategory === '주일예배' || selectedCategory === '삼일예배') {
+                            const validTimes = [
+                                '선교교회',
+                                '형제교회',
+                                '당일 외 대면',
+                                '8시',
+                                '정오',
+                                '오후 3:30:00',
+                                '19시',
+                                '20시',
+                                '21시',
+                            ];
+                            attendance = validTimes.includes(entry[date]) ? 1 : 0;
+                        } else {
+                            attendance = entry[date] === '참석' ? 1 : 0;
+                        }
+
+                        if (!attendanceByDate[date]) attendanceByDate[date] = [];
+                        attendanceByDate[date].push(attendance);
+                    });
+                });
+
+                // 전체 평균 데이터 계산
+                const averageDataset = {
+                    label: '전체 평균 참석률',
+                    data: allDates.map((date) => {
+                        const attendanceValues = attendanceByDate[date] || [];
+                        const totalAttendances = attendanceValues.length;
+                        const attendedCount = attendanceValues.reduce((acc, val) => acc + val, 0);
+                        return totalAttendances > 0 ? attendedCount / totalAttendances : 0;
+                    }),
+                    borderColor: 'purple',
+                    fill: false,
+                    tension: 0.1,
+                };
+
+                setChartData({
+                    labels: allDates,
+                    datasets: [averageDataset],
+                });
             } catch (error) {
-                console.error(error);
+                console.error('Error fetching data:', error);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchData();
-    }, []);
+        fetchAndCalculateParticipation();
+    }, [selectedCategory]);
 
-    useEffect(() => {
-        if (Object.keys(sheetsData).length > 0) {
-            // 날짜별 데이터 구조화 및 참석률 계산
-            const groupedData: { [date: string]: RowData[] } = {};
-
-            Object.values(sheetsData).forEach((sheet) => {
-                sheet.forEach((row) => {
-                    Object.keys(row).forEach((key) => {
-                        if (key !== '지역' && key !== '구역' && key !== '이름' && key !== '직책') {
-                            const date = key; // 날짜를 key로 사용
-                            if (!groupedData[date]) groupedData[date] = [];
-                            groupedData[date].push(row);
-                        }
-                    });
-                });
-            });
-
-            // X축(날짜) 및 Y축 (참석률) 데이터 생성
-            const labels: string[] = Object.keys(groupedData).sort(); // X축: 날짜
-            const attendanceRates: number[] = labels.map((date) => {
-                const rows = groupedData[date];
-                const totalAttendance = rows.filter((row) => row[date] === 1).length; // 해당 날짜에 참석한 사람 수
-                const totalPossible = rows.length; // 해당 날짜의 전체 데이터 수 (총 인원 수)
-                return (totalAttendance / totalPossible) * 100; // 참석률 (%) 계산
-            });
-
-            // Chart.js 데이터 구조 저장
-            setChartData({
-                labels, // X축: 날짜
-                datasets: [
-                    {
-                        label: '전체 참석률 (%)',
-                        data: attendanceRates,
-                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                    },
-                ],
-            });
+    // 그래프를 이미지로 저장하는 함수
+    const saveChartAsImage = () => {
+        const canvas = document.querySelector('canvas'); // 차트의 <canvas> 요소 찾기
+        if (canvas) {
+            const imageURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = imageURL;
+            link.download = 'chart.png';
+            link.click();
         }
-    }, [sheetsData]);
+    };
 
-    if (loading) return <p>Loading...</p>;
-
-    if (!chartData) return <p>No data available</p>;
+    if (loading) {
+        return <div>Loading...</div>;
+    }
 
     return (
-        <div>
-            <h1>전체 날짜별 참석률</h1>
-            <Bar
-                data={chartData}
-                options={{
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        },
-                        title: {
-                            display: true,
-                            text: '전체 참석률 (%)',
-                        },
-                    },
-                    scales: {
-                        y: {
-                            ticks: {
-                                callback: (value) => `${value}%`, // Y축 퍼센트 표시
+        <div className="p-4">
+            <h1 className="text-2xl font-bold mb-4">시트별 전체 평균 참석률</h1>
+            <div className="mb-4">
+                {[
+                    '구역예배',
+                    '구역모임',
+                    '총특교',
+                    '지정교',
+                    '말노정',
+                    '대회의',
+                    '귀소',
+                    '주일예배',
+                    '삼일예배',
+                    '십일조',
+                    '회비',
+                    '전도활동',
+                ].map((category) => (
+                    <button
+                        key={category}
+                        className={`px-4 py-2 text-white rounded-md mr-2 ${
+                            selectedCategory === category ? 'bg-blue-600' : 'bg-blue-500 hover:bg-blue-600'
+                        }`}
+                        onClick={() => setSelectedCategory(category)}
+                    >
+                        {category}
+                    </button>
+                ))}
+            </div>
+            <div className="relative">
+                <Line
+                    data={chartData}
+                    options={{
+                        responsive: true,
+                        plugins: {
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
                             },
-                            beginAtZero: true,
                         },
-                    },
-                }}
-            />
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '날짜',
+                                },
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '참석률 (%)',
+                                },
+                                min: 0,
+                                max: 1,
+                                ticks: {
+                                    callback: (value) => `${(value as number) * 100}%`,
+                                },
+                            },
+                        },
+                    }}
+                />
+            </div>
+            <button
+                onClick={saveChartAsImage}
+                className="mt-4 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
+            >
+                그래프 저장
+            </button>
         </div>
     );
-}
+};
+
+export default Region;
