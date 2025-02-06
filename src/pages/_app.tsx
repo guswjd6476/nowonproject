@@ -11,14 +11,25 @@ export default function App({ Component, pageProps }: AppProps) {
             <nav className="w-[140px] bg-gray-800 text-white p-4">
                 <h1 className="text-lg font-bold mb-4">분석 메뉴</h1>
                 <ul>
-                    <li className="mb-2">
-                        <Link href="/">
+                    <li>
+                        <Link href="/Region">
                             <span
                                 className={`block p-2 rounded ${
-                                    router.pathname === '/' ? 'bg-gray-700' : 'hover:bg-gray-600'
+                                    router.pathname === '/Region' ? 'bg-gray-700' : 'hover:bg-gray-600'
                                 }`}
                             >
-                                개별 분석
+                                지역별 분석
+                            </span>
+                        </Link>
+                    </li>
+                    <li>
+                        <Link href="/Functions">
+                            <span
+                                className={`block p-2 rounded ${
+                                    router.pathname === '/Functions' ? 'bg-gray-700' : 'hover:bg-gray-600'
+                                }`}
+                            >
+                                기능별 분석
                             </span>
                         </Link>
                     </li>
@@ -33,6 +44,7 @@ export default function App({ Component, pageProps }: AppProps) {
                             </span>
                         </Link>
                     </li>
+
                     <li>
                         <Link href="/Groups">
                             <span
@@ -44,14 +56,14 @@ export default function App({ Component, pageProps }: AppProps) {
                             </span>
                         </Link>
                     </li>
-                    <li>
-                        <Link href="/Region">
+                    <li className="mb-2">
+                        <Link href="/">
                             <span
                                 className={`block p-2 rounded ${
-                                    router.pathname === '/Region' ? 'bg-gray-700' : 'hover:bg-gray-600'
+                                    router.pathname === '/' ? 'bg-gray-700' : 'hover:bg-gray-600'
                                 }`}
                             >
-                                지역별 분석
+                                개별 분석
                             </span>
                         </Link>
                     </li>
