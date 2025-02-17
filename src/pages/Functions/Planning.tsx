@@ -21,7 +21,7 @@ type Member = {
     직책: string;
     [key: string]: string; // 날짜별 출석 정보 포함
 };
-
+type ViewType = 'chart' | 'table';
 type TeamAttendanceByDate = {
     [date: string]: Record<string, number[]>; // 날짜별 팀별 참석 여부 저장
 };
@@ -32,7 +32,7 @@ const Planning = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] });
     const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]);
-
+    const [selectedView, setSelectedView] = useState<ViewType>('chart');
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
             setLoading(true);
@@ -130,36 +130,94 @@ const Planning = () => {
                     </button>
                 ))}
             </div>
-
-            {/* 그래프 카테고리 */}
             <div className="mb-4">
-                <h2 className="text-xl font-semibold">그래프</h2>
-                <div className="relative">
-                    <Line
-                        data={chartData}
-                        options={{
-                            responsive: true,
-                            plugins: {
-                                title: {
-                                    display: true,
-                                    text: '팀별 참석률',
-                                },
-                            },
-                            scales: {
-                                y: {
-                                    min: 0,
-                                    max: 1,
-                                    ticks: {
-                                        callback: (value) => `${Number(value) * 100}%`,
-                                    },
-                                },
-                            },
-                        }}
-                    />
-                </div>
+                <button
+                    className={`px-4 py-2 rounded-md mr-2 ${
+                        selectedView === 'chart' ? 'bg-green-600 text-white' : 'bg-gray-300'
+                    }`}
+                    onClick={() => setSelectedView('chart')}
+                >
+                    그래프 보기
+                </button>
+                <button
+                    className={`px-4 py-2 rounded-md ${
+                        selectedView === 'table' ? 'bg-green-600 text-white' : 'bg-gray-300'
+                    }`}
+                    onClick={() => setSelectedView('table')}
+                >
+                    표로 보기
+                </button>
             </div>
+            {/* 그래프 카테고리 */}
 
-            <Analysis selectedCategory={selectedCategory} chartData={chartData} />
+            {selectedView === 'chart' ? (
+                <>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-semibold">그래프</h2>
+                        <div className="relative">
+                            <Line
+                                data={chartData}
+                                options={{
+                                    responsive: true,
+                                    plugins: {
+                                        title: {
+                                            display: true,
+                                            text: '팀별 참석률',
+                                        },
+                                    },
+                                    scales: {
+                                        y: {
+                                            min: 0,
+                                            max: 1,
+                                            ticks: {
+                                                callback: (value) => `${Number(value) * 100}%`,
+                                            },
+                                        },
+                                    },
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    <Analysis
+                        selectedCategory={selectedCategory}
+                        chartData={chartData}
+                    />
+                </>
+            ) : (
+                <>
+                    <table className="w-full border-collapse border border-gray-300 mt-4">
+                        <thead>
+                            <tr>
+                                <th className="border border-gray-300 px-4 py-2">날짜</th>
+                                {chartData.datasets.map((dataset) => (
+                                    <th
+                                        key={dataset.label}
+                                        className="border border-gray-300 px-4 py-2"
+                                    >
+                                        {dataset.label}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {chartData.labels?.map((date, index) => (
+                                <tr key={date as string}>
+                                    <td className="border border-gray-300 px-4 py-2">{date as string}</td>
+                                    {chartData.datasets.map((dataset) => (
+                                        <td
+                                            key={dataset.label}
+                                            className="border border-gray-300 px-4 py-2"
+                                        >
+                                            {((dataset.data[index] as number) * 100).toFixed(1)}%
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </>
+            )}
         </div>
     );
 };
@@ -216,7 +274,10 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
         <div className="mb-4">
             <h2 className="text-xl font-semibold">분석하기</h2>
             <div className="mb-4">
-                <label htmlFor="dateSelect" className="mr-2">
+                <label
+                    htmlFor="dateSelect"
+                    className="mr-2"
+                >
                     날짜 선택:
                 </label>
                 <select
@@ -227,7 +288,10 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
                 >
                     <option value="">날짜를 선택하세요</option>
                     {(chartData.labels || []).map((date) => (
-                        <option key={date as string} value={date as string}>
+                        <option
+                            key={date as string}
+                            value={date as string}
+                        >
                             {date as string}
                         </option>
                     ))}
@@ -239,7 +303,10 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
                     <h2 className="text-lg font-semibold">불참자 목록 ({selectedDate}):</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                         {sortedAbsentees.map((team) => (
-                            <div key={team} className="w-full">
+                            <div
+                                key={team}
+                                className="w-full"
+                            >
                                 <div className="rounded-lg shadow-lg p-4">
                                     <h3
                                         className={`text-xl font-bold text-white ${
@@ -256,7 +323,10 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
                                     </h3>
                                     <ul className="mt-2">
                                         {groupedAbsentees[team].map((member) => (
-                                            <li key={member.이름} className="border-b py-2">
+                                            <li
+                                                key={member.이름}
+                                                className="border-b py-2"
+                                            >
                                                 <span className="font-semibold">{member.이름}</span> ({member.reason})
                                             </li>
                                         ))}
