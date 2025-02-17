@@ -2,9 +2,18 @@ import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useMemo, useState } from 'react';
 
 export default function App({ Component, pageProps }: AppProps) {
     const router = useRouter();
+
+    // 현재 경로가 '/Functions' 또는 하위 경로인지 확인
+    const isFunctionsOpen = useMemo(() => router.pathname.startsWith('/Functions'), [router.pathname]);
+    const [manualOpen, setManualOpen] = useState(false);
+
+    // 실제 열림 여부를 결정 (자동 열림과 수동 토글을 함께 반영)
+    const isMenuOpen = isFunctionsOpen || manualOpen;
+
     return (
         <div className="flex h-screen">
             {/* Sidebar Navigation */}
@@ -23,17 +32,40 @@ export default function App({ Component, pageProps }: AppProps) {
                         </Link>
                     </li>
                     <li>
-                        <Link href="/Functions">
-                            <span
-                                className={`block p-2 rounded ${
-                                    router.pathname === '/Functions' ? 'bg-gray-700' : 'hover:bg-gray-600'
-                                }`}
-                            >
-                                기능별 분석
-                            </span>
-                        </Link>
+                        {/* Functions 메뉴 */}
+                        <button
+                            className={`w-full text-left block p-2 rounded ${
+                                isMenuOpen ? 'bg-gray-700' : 'hover:bg-gray-600'
+                            }`}
+                            onClick={() => setManualOpen(!manualOpen)}
+                        >
+                            기능별 분석
+                        </button>
+                        {isMenuOpen && (
+                            <ul className="ml-4 mt-2 space-y-1">
+                                {[
+                                    { href: '/Functions/Planning', label: '기획과' },
+                                    { href: '/Functions/Education', label: '교육과' },
+                                    { href: '/Functions/Evangelism', label: '전도과' },
+                                    { href: '/Functions/Visitation', label: '심방과' },
+                                    { href: '/Functions/Accounting', label: '회계' },
+                                ].map(({ href, label }) => (
+                                    <li key={href}>
+                                        <Link href={href}>
+                                            <span
+                                                className={`block p-2 rounded ${
+                                                    router.pathname === href ? 'bg-gray-700' : 'hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                {label}
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </li>
-                    <li className="mb-2">
+                    <li>
                         <Link href="/Team">
                             <span
                                 className={`block p-2 rounded ${
@@ -44,7 +76,6 @@ export default function App({ Component, pageProps }: AppProps) {
                             </span>
                         </Link>
                     </li>
-
                     <li>
                         <Link href="/Groups">
                             <span
@@ -56,7 +87,7 @@ export default function App({ Component, pageProps }: AppProps) {
                             </span>
                         </Link>
                     </li>
-                    <li className="mb-2">
+                    <li>
                         <Link href="/">
                             <span
                                 className={`block p-2 rounded ${

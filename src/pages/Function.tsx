@@ -46,7 +46,6 @@ const Functions = () => {
     const [selectedDate, setSelectedDate] = useState<string>(''); // 날짜 선택
     const [absentees, setAbsentees] = useState<Member[]>([]); // 불참자 리스트
 
-    console.log(absentees, 'absentees');
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
             try {
@@ -141,7 +140,7 @@ const Functions = () => {
         };
 
         fetchAndCalculateParticipation();
-    }, [selectedCategory]);
+    }, [selectedCategory, selectedDepartment]);
 
     // 날짜 선택 시 불참자 목록 필터링
     useEffect(() => {
@@ -212,10 +211,7 @@ const Functions = () => {
                 ))}
             </div>
             <div className="mb-4">
-                <label
-                    htmlFor="dateSelect"
-                    className="mr-2"
-                >
+                <label htmlFor="dateSelect" className="mr-2">
                     날짜 선택:
                 </label>
                 <select
@@ -227,10 +223,7 @@ const Functions = () => {
                     <option value="">날짜를 선택하세요</option>
                     {chartData.labels && chartData.labels.length > 0 ? (
                         chartData.labels.map((date) => (
-                            <option
-                                key={date as string}
-                                value={date as string}
-                            >
+                            <option key={date as string} value={date as string}>
                                 {date as string}
                             </option>
                         ))

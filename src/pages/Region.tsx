@@ -18,11 +18,11 @@ type Member = {
     이름: string;
     구역: string;
     직책: string;
-    [key: string]: string; // 날짜별 출석 정보 포함
+    [key: string]: string;
 };
 
 type AttendanceByDate = {
-    [date: string]: number[]; // 날짜별 참석 여부를 저장
+    [date: string]: number[];
 };
 
 const Region = () => {
@@ -60,7 +60,6 @@ const Region = () => {
                         )
                     )
                 ).sort((a, b) => {
-                    // 날짜 형식으로 정렬
                     const dateA = new Date(a);
                     const dateB = new Date(b);
                     return dateA.getTime() - dateB.getTime();

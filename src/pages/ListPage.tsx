@@ -14,7 +14,6 @@ const ListPage = () => {
             const res = await fetch('/api/googleSheet');
             const data = await res.json();
             if (data.ok) {
-                // 'data.data['노원명단']'의 요소는 Person 타입이라고 가정
                 const peopleList = data.data['노원명단'].map((person: Person) => person['이름']);
                 setPeople(peopleList);
             }
