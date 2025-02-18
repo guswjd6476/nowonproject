@@ -83,20 +83,6 @@ const Functions = () => {
                             attendance = entry[date] === '본구역예배' ? 1 : 0;
                         } else if (['총특교', '지정교'].includes(selectedCategory)) {
                             attendance = entry[date] === '미시청' ? 0 : 1;
-                        } else if (['주일예배', '삼일예배'].includes(selectedCategory)) {
-                            attendance = [
-                                '선교교회',
-                                '형제교회',
-                                '당일 외 대면',
-                                '8시',
-                                '정오',
-                                '오후 3:30:00',
-                                '19시',
-                                '20시',
-                                '21시',
-                            ].includes(entry[date])
-                                ? 1
-                                : 0;
                         } else {
                             attendance = entry[date] === '참석' ? 1 : 0;
                         }
@@ -211,7 +197,10 @@ const Functions = () => {
                 ))}
             </div>
             <div className="mb-4">
-                <label htmlFor="dateSelect" className="mr-2">
+                <label
+                    htmlFor="dateSelect"
+                    className="mr-2"
+                >
                     날짜 선택:
                 </label>
                 <select
@@ -223,7 +212,10 @@ const Functions = () => {
                     <option value="">날짜를 선택하세요</option>
                     {chartData.labels && chartData.labels.length > 0 ? (
                         chartData.labels.map((date) => (
-                            <option key={date as string} value={date as string}>
+                            <option
+                                key={date as string}
+                                value={date as string}
+                            >
                                 {date as string}
                             </option>
                         ))

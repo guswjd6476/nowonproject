@@ -47,7 +47,7 @@ export default function App({ Component, pageProps }: AppProps) {
                                     { href: '/Functions/Planning', label: '기획과' },
                                     { href: '/Functions/Education', label: '교육과' },
                                     { href: '/Functions/Evangelism', label: '전도과' },
-                                    { href: '/Functions/Visitation', label: '심방과' },
+                                    { href: '/Functions/VisitEducation', label: '심방과' },
                                     { href: '/Functions/Accounting', label: '회계' },
                                 ].map(({ href, label }) => (
                                     <li key={href}>

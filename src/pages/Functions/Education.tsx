@@ -43,9 +43,9 @@ type ChartDataset = {
     tension: number;
 };
 
-const categories = ['대회의', '귀소'];
+const categories = ['구역예배', '총특교', '지정교', '말노정', '월정기교육'];
 
-const Planning = () => {
+const Education = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [chartData, setChartData] = useState<ChartData<'line', number[], string>>({ labels: [], datasets: [] });
     const [attendanceMatrix, setAttendanceMatrix] = useState<AttendanceMatrixRow[]>([]); // 사용하기 위해 상태로 관리
@@ -73,25 +73,24 @@ const Planning = () => {
                             Object.keys(item).filter(
                                 (key) =>
                                     key !== 'ID' &&
-                                    key !== '구분' &&
                                     key !== '구역' &&
+                                    key !== '구분' &&
                                     key !== '시트이름' &&
                                     key !== '이름' &&
                                     key !== '직책'
                             )
                         )
                     )
-                ) as string[]; // Ensure it's typed as string[]
+                ) as string[];
                 setDates(dates);
-
                 const names = json.data.map((item: Member) => item.이름);
 
                 const attendanceMatrix = names.map((name: string) => {
                     const row: AttendanceMatrixRow = { name };
-
+                    // 구역 추가
                     const member = json.data.find((item: Member) => item.이름 === name);
 
-                    row.구역 = member?.구역 || '-';
+                    row.구역 = member?.구역 || '-'; // 구역 정보가 없으면 기본값 '-' 설정
 
                     dates.forEach((date: string) => {
                         const status = member?.[date] || '불참';
@@ -101,7 +100,6 @@ const Planning = () => {
                     return row;
                 });
                 setAttendanceMatrix(attendanceMatrix);
-
                 const allDates = dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
                 categoryData.forEach((entry: Member) => {
@@ -109,7 +107,26 @@ const Planning = () => {
                     if (!team) return;
 
                     allDates.forEach((date: string) => {
-                        const attendance = entry[date] === '참석' ? 1 : 0;
+                        const status = entry[date] || '';
+
+                        let attendance = 0;
+
+                        if (selectedCategory === '말노정') {
+                            attendance = status === '1' ? 1 : 0;
+                        } else if (selectedCategory === '구역예배') {
+                            attendance = status.includes('본구역예배') ? 1 : 0;
+                        } else if (selectedCategory === '총특교' || selectedCategory === '지정교') {
+                            attendance = status === '시청' ? 1 : 0;
+                        } else if (selectedCategory === '월정기교육') {
+                            attendance =
+                                status.includes('대면') ||
+                                status.includes('카드뉴스 포함') ||
+                                status.includes('인시센 포함') ||
+                                status.includes('구두전달 포함')
+                                    ? 1
+                                    : 0;
+                        }
+
                         teamAttendanceByDate[date] = teamAttendanceByDate[date] || {};
                         teamAttendanceByDate[date][team] = teamAttendanceByDate[date][team] || [];
                         teamAttendanceByDate[date][team].push(attendance);
@@ -131,7 +148,6 @@ const Planning = () => {
                     label: `팀 ${team}`,
                     data: allDates.map((date: string) => {
                         const attendanceValues = (teamAttendanceByDate[date]?.[team] || []) as number[];
-
                         const totalAttendances = attendanceValues.length;
                         const attendedCount = attendanceValues.reduce((acc, val) => acc + Number(val), 0);
                         return totalAttendances > 0 ? attendedCount / totalAttendances : 0;
@@ -160,7 +176,7 @@ const Planning = () => {
 
     return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold mb-4">기획과 - 팀별 참석률 분석</h1>
+            <h1 className="text-2xl font-bold mb-4">교육과 - 팀별 참석률 분석</h1>
 
             <div className="mb-4">
                 {categories.map((category) => (
@@ -224,13 +240,12 @@ const Planning = () => {
                                             },
                                         },
                                     },
-
                                     scales: {
                                         y: {
                                             min: 0,
                                             max: 1,
                                             ticks: {
-                                                callback: (value) => `${Number(value) * 100}%`,
+                                                callback: (value) => `${(Number(value) * 100).toFixed(0)}%`,
                                             },
                                         },
                                     },
@@ -280,7 +295,22 @@ const Analysis = ({
 
             const categoryData: Member[] = json.data;
             const absenteesList = categoryData
-                .filter((entry) => entry[selectedDate]?.startsWith('불참'))
+                .filter((entry) => {
+                    const status = entry[selectedDate];
+                    if (selectedCategory === '구역예배') {
+                        return !status || status === '미참여' || status === ''; // 공란 또는 불참
+                    }
+                    if (selectedCategory === '총특교' || selectedCategory === '지정교') {
+                        return status === '미시청'; // 미시청
+                    }
+                    if (selectedCategory === '말노정') {
+                        return status === '-' || status === '' || status === '0'; // -, 공란, 0
+                    }
+                    if (selectedCategory === '월정기교육') {
+                        return status.includes('불참');
+                    }
+                    return false; // 기본적으로 불참을 제외한 경우
+                })
                 .map((entry) => ({
                     이름: entry.이름,
                     구역: entry.구역,
@@ -304,18 +334,16 @@ const Analysis = ({
     }, {} as Record<string, Member[]>);
 
     const sortedAbsentees = Object.keys(groupedAbsentees).sort((a, b) => {
-        const teamAAbsentees = groupedAbsentees[a].length;
-        const teamBAbsentees = groupedAbsentees[b].length;
-        return teamBAbsentees - teamAAbsentees;
+        return groupedAbsentees[b].length - groupedAbsentees[a].length;
     });
 
     return (
         <div className="mb-4">
-            <h2 className="text-xl font-semibold">분석하기</h2>
+            <h2 className="text-xl font-semibold mb-4">📊 분석하기</h2>
             <div className="mb-4">
                 <label
                     htmlFor="dateSelect"
-                    className="mr-2"
+                    className="mr-2 font-medium"
                 >
                     날짜 선택:
                 </label>
@@ -323,7 +351,7 @@ const Analysis = ({
                     id="dateSelect"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-4 py-2"
+                    className="px-4 py-2 border rounded-md shadow-sm"
                 >
                     <option value="">날짜를 선택하세요</option>
                     {(chartData.labels || []).map((date) => (
@@ -339,21 +367,44 @@ const Analysis = ({
 
             {selectedDate && (
                 <div className="mb-4">
-                    <h2 className="text-lg font-semibold">불참자 목록 ({selectedDate}):</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                    <h2 className="text-lg font-semibold mb-2">📌 불참자 목록 ({selectedDate}):</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
                         {sortedAbsentees.map((team) => (
                             <div
                                 key={team}
-                                className="w-full"
+                                className="bg-white shadow-md rounded-lg p-4 border border-gray-200"
                             >
-                                <h3 className="text-md font-semibold mb-2">팀 {team}</h3>
-                                <ul>
-                                    {groupedAbsentees[team].map((member) => (
-                                        <li key={member.이름}>
-                                            {member.이름} ({member.reason})
-                                        </li>
-                                    ))}
-                                </ul>
+                                <h3 className="text-md font-semibold mb-2 text-center">
+                                    🔹 팀 {team} ({groupedAbsentees[team].length}명)
+                                </h3>
+                                <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-100">
+                                            <th className="border px-2 py-1">구역</th> {/* 사유 대신 구역으로 변경 */}
+                                            <th className="border px-2 py-1">이름</th>
+                                            <th className="border px-2 py-1">직책</th>
+                                            {selectedCategory === '월정기교육' ? (
+                                                <th className="border px-2 py-1">사유</th>
+                                            ) : null}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {groupedAbsentees[team].map((member) => (
+                                            <tr
+                                                key={member.이름}
+                                                className="text-center"
+                                            >
+                                                <td className="border px-2 py-1">{member.구역}</td>
+                                                <td className="border px-2 py-1">{member.이름}</td>
+                                                <td className="border px-2 py-1">{member.직책}</td>
+
+                                                {selectedCategory === '월정기교육' ? (
+                                                    <td className="border px-2 py-1">{member.reason}</td>
+                                                ) : null}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         ))}
                     </div>
@@ -451,4 +502,4 @@ function AttendanceTable({ dates, attendanceMatrix }: Props) {
     );
 }
 
-export default Planning;
+export default Education;

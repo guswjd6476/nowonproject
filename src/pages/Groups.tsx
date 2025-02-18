@@ -12,6 +12,7 @@ import {
     ChartData,
     ChartDataset,
 } from 'chart.js';
+import { excludedTimesAndPlaces } from '@/lib/datas';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -37,18 +38,7 @@ const getScoreForMeeting = (meetingType: string, value: string): number => {
     } else if (meetingType === '총특교' || meetingType === '지정교') {
         attendance = value === '미시청' ? 0 : 1; // 미시청 = 불참, 그 외 = 참석
     } else if (meetingType === '주일예배' || meetingType === '삼일예배') {
-        const validTimes = [
-            '선교교회',
-            '형제교회',
-            '당일 외 대면',
-            '8시',
-            '정오',
-            '오후 3:30:00',
-            '19시',
-            '20시',
-            '21시',
-        ];
-        attendance = validTimes.includes(value) ? 1 : 0; // 정해진 시간에 참석하면 1, 아니면 0
+        attendance = excludedTimesAndPlaces.includes(value) ? 1 : 0; // 정해진 시간에 참석하면 1, 아니면 0
     } else if (meetingType === '말노정' || meetingType === '구역모임') {
         attendance = value === '1' ? 1 : 0; // 값이 1이면 참석, 아니면 불참
     } else {

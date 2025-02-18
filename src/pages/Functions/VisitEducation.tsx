@@ -15,6 +15,7 @@ import { AttendanceMatrixRow } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { ArrowUpDown } from 'lucide-react';
+import { excludedTimesAndPlaces } from '@/lib/datas';
 interface Props {
     dates: string[];
     attendanceMatrix: AttendanceMatrixRow[];
@@ -43,9 +44,9 @@ type ChartDataset = {
     tension: number;
 };
 
-const categories = ['대회의', '귀소'];
+const categories = ['주일예배', '삼일예배'];
 
-const Planning = () => {
+const Accounting = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [chartData, setChartData] = useState<ChartData<'line', number[], string>>({ labels: [], datasets: [] });
     const [attendanceMatrix, setAttendanceMatrix] = useState<AttendanceMatrixRow[]>([]); // 사용하기 위해 상태로 관리
@@ -73,25 +74,24 @@ const Planning = () => {
                             Object.keys(item).filter(
                                 (key) =>
                                     key !== 'ID' &&
-                                    key !== '구분' &&
                                     key !== '구역' &&
+                                    key !== '구분' &&
                                     key !== '시트이름' &&
                                     key !== '이름' &&
                                     key !== '직책'
                             )
                         )
                     )
-                ) as string[]; // Ensure it's typed as string[]
+                ) as string[];
                 setDates(dates);
-
                 const names = json.data.map((item: Member) => item.이름);
 
                 const attendanceMatrix = names.map((name: string) => {
                     const row: AttendanceMatrixRow = { name };
-
+                    // 구역 추가
                     const member = json.data.find((item: Member) => item.이름 === name);
 
-                    row.구역 = member?.구역 || '-';
+                    row.구역 = member?.구역 || '-'; // 구역 정보가 없으면 기본값 '-' 설정
 
                     dates.forEach((date: string) => {
                         const status = member?.[date] || '불참';
@@ -101,7 +101,6 @@ const Planning = () => {
                     return row;
                 });
                 setAttendanceMatrix(attendanceMatrix);
-
                 const allDates = dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
                 categoryData.forEach((entry: Member) => {
@@ -109,7 +108,7 @@ const Planning = () => {
                     if (!team) return;
 
                     allDates.forEach((date: string) => {
-                        const attendance = entry[date] === '참석' ? 1 : 0;
+                        const attendance = excludedTimesAndPlaces.includes(entry[date]) ? 1 : 0;
                         teamAttendanceByDate[date] = teamAttendanceByDate[date] || {};
                         teamAttendanceByDate[date][team] = teamAttendanceByDate[date][team] || [];
                         teamAttendanceByDate[date][team].push(attendance);
@@ -131,7 +130,6 @@ const Planning = () => {
                     label: `팀 ${team}`,
                     data: allDates.map((date: string) => {
                         const attendanceValues = (teamAttendanceByDate[date]?.[team] || []) as number[];
-
                         const totalAttendances = attendanceValues.length;
                         const attendedCount = attendanceValues.reduce((acc, val) => acc + Number(val), 0);
                         return totalAttendances > 0 ? attendedCount / totalAttendances : 0;
@@ -160,7 +158,7 @@ const Planning = () => {
 
     return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold mb-4">기획과 - 팀별 참석률 분석</h1>
+            <h1 className="text-2xl font-bold mb-4">심방과 - 팀별 참석률 분석</h1>
 
             <div className="mb-4">
                 {categories.map((category) => (
@@ -224,13 +222,12 @@ const Planning = () => {
                                             },
                                         },
                                     },
-
                                     scales: {
                                         y: {
                                             min: 0,
                                             max: 1,
                                             ticks: {
-                                                callback: (value) => `${Number(value) * 100}%`,
+                                                callback: (value) => `${(Number(value) * 100).toFixed(0)}%`,
                                             },
                                         },
                                     },
@@ -255,7 +252,6 @@ const Planning = () => {
         </div>
     );
 };
-
 const Analysis = ({
     selectedCategory,
     chartData,
@@ -279,13 +275,17 @@ const Analysis = ({
             }
 
             const categoryData: Member[] = json.data;
+
             const absenteesList = categoryData
-                .filter((entry) => entry[selectedDate]?.startsWith('불참'))
+                .filter((entry) => {
+                    const attendanceStatus = entry[selectedDate];
+                    return !excludedTimesAndPlaces.some((excluded) => attendanceStatus.includes(excluded));
+                })
                 .map((entry) => ({
                     이름: entry.이름,
                     구역: entry.구역,
                     직책: entry.직책,
-                    reason: entry[selectedDate]?.split('(')[1]?.replace(')', '') || '사유 없음',
+                    reason: entry[selectedDate] || '사유 없음',
                 }));
 
             setAbsentees(absenteesList);
@@ -451,4 +451,4 @@ function AttendanceTable({ dates, attendanceMatrix }: Props) {
     );
 }
 
-export default Planning;
+export default Accounting;
