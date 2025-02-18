@@ -21,18 +21,37 @@ type Member = {
     직책: string;
     [key: string]: string; // 날짜별 출석 정보 포함
 };
+
+type AttendanceMatrixRow = {
+    name: string;
+    [date: string]: string; // 날짜별 참석 상태
+};
+
 type ViewType = 'chart' | 'table';
+
 type TeamAttendanceByDate = {
     [date: string]: Record<string, number[]>; // 날짜별 팀별 참석 여부 저장
+};
+
+type ChartDataset = {
+    label: string;
+    data: number[];
+    borderColor: string;
+    backgroundColor: string;
+    fill: boolean;
+    tension: number;
 };
 
 const categories = ['대회의', '귀소'];
 
 const Planning = () => {
     const [loading, setLoading] = useState<boolean>(true);
-    const [chartData, setChartData] = useState<ChartData<'line'>>({ labels: [], datasets: [] });
+    const [chartData, setChartData] = useState<ChartData<'line', number[], string>>({ labels: [], datasets: [] });
+    const [attendanceMatrix, setAttendanceMatrix] = useState<AttendanceMatrixRow[]>([]); // 사용하기 위해 상태로 관리
+    const [dates, setDates] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]);
     const [selectedView, setSelectedView] = useState<ViewType>('chart');
+
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
             setLoading(true);
@@ -47,22 +66,42 @@ const Planning = () => {
 
                 const categoryData: Member[] = json.data;
                 const teamAttendanceByDate: TeamAttendanceByDate = {};
-
-                const allDates = Array.from(
+                const dates = Array.from(
                     new Set(
-                        categoryData.flatMap((entry) =>
-                            Object.keys(entry).filter(
-                                (key) => !['이름', '구역', '직책', '시트이름', 'ID', '구분'].includes(key)
+                        json.data.flatMap((item: Member) =>
+                            Object.keys(item).filter(
+                                (key) =>
+                                    key !== 'ID' &&
+                                    key !== '구분' &&
+                                    key !== '구역' &&
+                                    key !== '시트이름' &&
+                                    key !== '이름' &&
+                                    key !== '직책'
                             )
                         )
                     )
-                ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                ) as string[]; // Ensure it's typed as string[]
+                setDates(dates);
 
-                categoryData.forEach((entry) => {
+                const names = json.data.map((item: Member) => item.이름);
+
+                const attendanceMatrix = names.map((name: string) => {
+                    const row: AttendanceMatrixRow = { name };
+                    dates.forEach((date: string) => {
+                        const status = json.data.find((item: Member) => item.이름 === name)?.[date] || '불참';
+                        row[date] = status;
+                    });
+                    return row;
+                });
+                setAttendanceMatrix(attendanceMatrix);
+
+                const allDates = dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+                categoryData.forEach((entry: Member) => {
                     const team = entry.구역?.split('-')[0];
                     if (!team) return;
 
-                    allDates.forEach((date) => {
+                    allDates.forEach((date: string) => {
                         const attendance = entry[date] === '참석' ? 1 : 0;
                         teamAttendanceByDate[date] = teamAttendanceByDate[date] || {};
                         teamAttendanceByDate[date][team] = teamAttendanceByDate[date][team] || [];
@@ -81,9 +120,9 @@ const Planning = () => {
                     '4': 'rgb(34, 197, 94)', // Green
                 };
 
-                const datasets = teams.map((team) => ({
+                const datasets: ChartDataset[] = teams.map((team) => ({
                     label: `팀 ${team}`,
-                    data: allDates.map((date) => {
+                    data: allDates.map((date: string) => {
                         const attendanceValues = (teamAttendanceByDate[date]?.[team] || []) as number[];
 
                         const totalAttendances = attendanceValues.length;
@@ -148,7 +187,6 @@ const Planning = () => {
                     표로 보기
                 </button>
             </div>
-            {/* 그래프 카테고리 */}
 
             {selectedView === 'chart' ? (
                 <>
@@ -179,38 +217,25 @@ const Planning = () => {
                         </div>
                     </div>
 
-                    <Analysis
-                        selectedCategory={selectedCategory}
-                        chartData={chartData}
-                    />
+                    <Analysis selectedCategory={selectedCategory} chartData={chartData} />
                 </>
             ) : (
                 <>
-                    <table className="w-full border-collapse border border-gray-300 mt-4">
+                    <table>
                         <thead>
                             <tr>
-                                <th className="border border-gray-300 px-4 py-2">날짜</th>
-                                {chartData.datasets.map((dataset) => (
-                                    <th
-                                        key={dataset.label}
-                                        className="border border-gray-300 px-4 py-2"
-                                    >
-                                        {dataset.label}
-                                    </th>
+                                <th>이름</th>
+                                {dates.map((date, index) => (
+                                    <th key={index}>{date}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {chartData.labels?.map((date, index) => (
-                                <tr key={date as string}>
-                                    <td className="border border-gray-300 px-4 py-2">{date as string}</td>
-                                    {chartData.datasets.map((dataset) => (
-                                        <td
-                                            key={dataset.label}
-                                            className="border border-gray-300 px-4 py-2"
-                                        >
-                                            {((dataset.data[index] as number) * 100).toFixed(1)}%
-                                        </td>
+                            {attendanceMatrix.map((row, index) => (
+                                <tr key={index}>
+                                    <td>{row.name}</td>
+                                    {dates.map((date, i) => (
+                                        <td key={i}>{row[date]}</td>
                                     ))}
                                 </tr>
                             ))}
@@ -222,7 +247,13 @@ const Planning = () => {
     );
 };
 
-const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; chartData: ChartData<'line'> }) => {
+const Analysis = ({
+    selectedCategory,
+    chartData,
+}: {
+    selectedCategory: string;
+    chartData: ChartData<'line', number[], string>;
+}) => {
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [absentees, setAbsentees] = useState<Member[]>([]);
 
@@ -263,21 +294,17 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
         return acc;
     }, {} as Record<string, Member[]>);
 
-    // 불참자 순으로 정렬
     const sortedAbsentees = Object.keys(groupedAbsentees).sort((a, b) => {
         const teamAAbsentees = groupedAbsentees[a].length;
         const teamBAbsentees = groupedAbsentees[b].length;
-        return teamBAbsentees - teamAAbsentees; // 내림차순으로 정렬
+        return teamBAbsentees - teamAAbsentees;
     });
 
     return (
         <div className="mb-4">
             <h2 className="text-xl font-semibold">분석하기</h2>
             <div className="mb-4">
-                <label
-                    htmlFor="dateSelect"
-                    className="mr-2"
-                >
+                <label htmlFor="dateSelect" className="mr-2">
                     날짜 선택:
                 </label>
                 <select
@@ -288,10 +315,7 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
                 >
                     <option value="">날짜를 선택하세요</option>
                     {(chartData.labels || []).map((date) => (
-                        <option
-                            key={date as string}
-                            value={date as string}
-                        >
+                        <option key={date as string} value={date as string}>
                             {date as string}
                         </option>
                     ))}
@@ -303,35 +327,15 @@ const Analysis = ({ selectedCategory, chartData }: { selectedCategory: string; c
                     <h2 className="text-lg font-semibold">불참자 목록 ({selectedDate}):</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                         {sortedAbsentees.map((team) => (
-                            <div
-                                key={team}
-                                className="w-full"
-                            >
-                                <div className="rounded-lg shadow-lg p-4">
-                                    <h3
-                                        className={`text-xl font-bold text-white ${
-                                            team === '1'
-                                                ? 'bg-red-500'
-                                                : team === '2'
-                                                ? 'bg-blue-500'
-                                                : team === '3'
-                                                ? 'bg-yellow-500'
-                                                : 'bg-green-500'
-                                        } p-2 rounded-md`}
-                                    >
-                                        팀 {team}
-                                    </h3>
-                                    <ul className="mt-2">
-                                        {groupedAbsentees[team].map((member) => (
-                                            <li
-                                                key={member.이름}
-                                                className="border-b py-2"
-                                            >
-                                                <span className="font-semibold">{member.이름}</span> ({member.reason})
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
+                            <div key={team} className="w-full">
+                                <h3 className="text-md font-semibold mb-2">팀 {team}</h3>
+                                <ul>
+                                    {groupedAbsentees[team].map((member) => (
+                                        <li key={member.이름}>
+                                            {member.이름} ({member.reason})
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         ))}
                     </div>
