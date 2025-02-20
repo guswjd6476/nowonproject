@@ -16,11 +16,6 @@ import { excludedTimesAndPlaces } from '@/lib/datas';
 import { AttendanceMatrixRow } from '@/lib/types';
 import AttendanceTable from '@/components/AttendanceTable';
 
-interface Props {
-    dates: string[];
-    attendanceMatrix: AttendanceMatrixRow[];
-}
-
 // Chart.js 설정
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
