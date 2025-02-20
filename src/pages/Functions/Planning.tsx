@@ -12,14 +12,8 @@ import {
     ChartData,
 } from 'chart.js';
 import { AttendanceMatrixRow } from '@/lib/types';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { ArrowUpDown } from 'lucide-react';
-interface Props {
-    dates: string[];
-    attendanceMatrix: AttendanceMatrixRow[];
-}
-// Chart.js 설정
+import AttendanceTable from '@/components/AttendanceTable';
+
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 type Member = {
@@ -239,17 +233,11 @@ const Planning = () => {
                         </div>
                     </div>
 
-                    <Analysis
-                        selectedCategory={selectedCategory}
-                        chartData={chartData}
-                    />
+                    <Analysis selectedCategory={selectedCategory} chartData={chartData} />
                 </>
             ) : (
                 <>
-                    <AttendanceTable
-                        dates={dates}
-                        attendanceMatrix={attendanceMatrix}
-                    />
+                    <AttendanceTable dates={dates} attendanceMatrix={attendanceMatrix} />
                 </>
             )}
         </div>
@@ -313,10 +301,7 @@ const Analysis = ({
         <div className="mb-4">
             <h2 className="text-xl font-semibold">분석하기</h2>
             <div className="mb-4">
-                <label
-                    htmlFor="dateSelect"
-                    className="mr-2"
-                >
+                <label htmlFor="dateSelect" className="mr-2">
                     날짜 선택:
                 </label>
                 <select
@@ -327,10 +312,7 @@ const Analysis = ({
                 >
                     <option value="">날짜를 선택하세요</option>
                     {(chartData.labels || []).map((date) => (
-                        <option
-                            key={date as string}
-                            value={date as string}
-                        >
+                        <option key={date as string} value={date as string}>
                             {date as string}
                         </option>
                     ))}
@@ -342,10 +324,7 @@ const Analysis = ({
                     <h2 className="text-lg font-semibold">불참자 목록 ({selectedDate}):</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                         {sortedAbsentees.map((team) => (
-                            <div
-                                key={team}
-                                className="w-full"
-                            >
+                            <div key={team} className="w-full">
                                 <h3 className="text-md font-semibold mb-2">팀 {team}</h3>
                                 <ul>
                                     {groupedAbsentees[team].map((member) => (
@@ -362,93 +341,5 @@ const Analysis = ({
         </div>
     );
 };
-function AttendanceTable({ dates, attendanceMatrix }: Props) {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-
-    // 정렬 함수
-    const sortedData = [...attendanceMatrix].sort((a, b) => {
-        if (!sortConfig) return 0;
-        const { key, direction } = sortConfig;
-        const valueA = a[key] ?? '';
-        const valueB = b[key] ?? '';
-
-        if (valueA < valueB) return direction === 'asc' ? -1 : 1;
-        if (valueA > valueB) return direction === 'asc' ? 1 : -1;
-        return 0;
-    });
-
-    // 필터링
-    const filteredData = sortedData.filter((row) => row.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    // 정렬 변경 함수
-    const toggleSort = (key: string) => {
-        setSortConfig((prev) => {
-            if (prev?.key === key) {
-                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-            }
-            return { key, direction: 'asc' };
-        });
-    };
-
-    return (
-        <div className="p-4">
-            <Input
-                type="text"
-                placeholder="이름 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="mb-4"
-            />
-            <Table className="border border-gray-200">
-                <TableHeader className="bg-gray-100">
-                    <TableRow>
-                        <TableHead
-                            onClick={() => toggleSort('구역')}
-                            className="cursor-pointer"
-                        >
-                            구역 <ArrowUpDown className="inline-block w-4 h-4" />
-                        </TableHead>
-                        <TableHead
-                            onClick={() => toggleSort('name')}
-                            className="cursor-pointer"
-                        >
-                            이름 <ArrowUpDown className="inline-block w-4 h-4" />
-                        </TableHead>
-
-                        {dates.map((date, index) => (
-                            <TableHead
-                                key={index}
-                                onClick={() => toggleSort(date)}
-                                className="cursor-pointer text-center"
-                            >
-                                {date} <ArrowUpDown className="inline-block w-4 h-4" />
-                            </TableHead>
-                        ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {filteredData.map((row, index) => (
-                        <TableRow
-                            key={index}
-                            className="hover:bg-gray-50"
-                        >
-                            <TableCell className="font-medium">{row.구역 || '-'}</TableCell> {/* 구역 값 출력 */}
-                            <TableCell className="font-medium">{row.name}</TableCell>
-                            {dates.map((date, i) => (
-                                <TableCell
-                                    key={i}
-                                    className="text-center"
-                                >
-                                    {row[date] ?? '-'}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
-    );
-}
 
 export default Planning;

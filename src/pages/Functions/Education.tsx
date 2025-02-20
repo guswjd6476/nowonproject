@@ -12,14 +12,8 @@ import {
     ChartData,
 } from 'chart.js';
 import { AttendanceMatrixRow } from '@/lib/types';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { ArrowUpDown } from 'lucide-react';
-interface Props {
-    dates: string[];
-    attendanceMatrix: AttendanceMatrixRow[];
-}
-// Chart.js 설정
+import AttendanceTable from '@/components/AttendanceTable';
+
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 type Member = {
@@ -52,6 +46,9 @@ const Education = () => {
     const [dates, setDates] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]);
     const [selectedView, setSelectedView] = useState<ViewType>('chart');
+    const [includeCardNews, setIncludeCardNews] = useState<boolean>(false); // 카드뉴스 포함 여부
+    const [includeInSiSen, setIncludeInSiSen] = useState<boolean>(false); // 인시센 포함 여부
+    const [includeGuDuJeonDal, setIncludeGuDuJeonDal] = useState<boolean>(false); // 구두전달 포함 여부
 
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
@@ -77,7 +74,8 @@ const Education = () => {
                                     key !== '구분' &&
                                     key !== '시트이름' &&
                                     key !== '이름' &&
-                                    key !== '직책'
+                                    key !== '직책' &&
+                                    key !== '검색용'
                             )
                         )
                     )
@@ -117,14 +115,20 @@ const Education = () => {
                             attendance = status.includes('본구역예배') ? 1 : 0;
                         } else if (selectedCategory === '총특교' || selectedCategory === '지정교') {
                             attendance = status === '시청' ? 1 : 0;
+                            if (includeCardNews && status.includes('카드뉴스')) {
+                                attendance = 1; // 카드뉴스 포함 시 참석 처리
+                            }
                         } else if (selectedCategory === '월정기교육') {
-                            attendance =
-                                status.includes('대면') ||
-                                status.includes('카드뉴스 포함') ||
-                                status.includes('인시센 포함') ||
-                                status.includes('구두전달 포함')
-                                    ? 1
-                                    : 0;
+                            attendance = status.includes('대면') ? 1 : 0;
+                            if (includeCardNews && status.includes('카드뉴스')) {
+                                attendance = 1; // 카드뉴스 포함 시 참석 처리
+                            }
+                            if (includeInSiSen && status.includes('인시센')) {
+                                attendance = 1; // 인시센 포함 시 참석 처리
+                            }
+                            if (includeGuDuJeonDal && status.includes('구두전달')) {
+                                attendance = 1; // 구두전달 포함 시 참석 처리
+                            }
                         }
 
                         teamAttendanceByDate[date] = teamAttendanceByDate[date] || {};
@@ -170,7 +174,7 @@ const Education = () => {
         };
 
         fetchAndCalculateParticipation();
-    }, [selectedCategory]);
+    }, [selectedCategory, includeCardNews, includeInSiSen, includeGuDuJeonDal]);
 
     if (loading) return <div>Loading...</div>;
 
@@ -191,6 +195,42 @@ const Education = () => {
                     </button>
                 ))}
             </div>
+
+            {/* 총특교, 지정교, 월정기교육 항목에 대한 체크박스 추가 */}
+            {(selectedCategory === '총특교' || selectedCategory === '지정교') && (
+                <div className="mb-4">
+                    <label className="mr-2">카드뉴스 포함</label>
+                    <input
+                        type="checkbox"
+                        checked={includeCardNews}
+                        onChange={(e) => setIncludeCardNews(e.target.checked)}
+                    />
+                </div>
+            )}
+
+            {selectedCategory === '월정기교육' && (
+                <div className="mb-4">
+                    <label className="mr-2">카드뉴스 포함</label>
+                    <input
+                        type="checkbox"
+                        checked={includeCardNews}
+                        onChange={(e) => setIncludeCardNews(e.target.checked)}
+                    />
+                    <label className="mr-2">인시센 포함</label>
+                    <input
+                        type="checkbox"
+                        checked={includeInSiSen}
+                        onChange={(e) => setIncludeInSiSen(e.target.checked)}
+                    />
+                    <label className="mr-2">구두전달 포함</label>
+                    <input
+                        type="checkbox"
+                        checked={includeGuDuJeonDal}
+                        onChange={(e) => setIncludeGuDuJeonDal(e.target.checked)}
+                    />
+                </div>
+            )}
+
             <div className="mb-4">
                 <button
                     className={`px-4 py-2 rounded-md mr-2 ${
@@ -245,7 +285,9 @@ const Education = () => {
                                             min: 0,
                                             max: 1,
                                             ticks: {
-                                                callback: (value) => `${(Number(value) * 100).toFixed(0)}%`,
+                                                callback: function (value) {
+                                                    return Number(value) * 100 + '%';
+                                                },
                                             },
                                         },
                                     },
@@ -253,253 +295,12 @@ const Education = () => {
                             />
                         </div>
                     </div>
-
-                    <Analysis
-                        selectedCategory={selectedCategory}
-                        chartData={chartData}
-                    />
                 </>
             ) : (
-                <>
-                    <AttendanceTable
-                        dates={dates}
-                        attendanceMatrix={attendanceMatrix}
-                    />
-                </>
+                <AttendanceTable dates={dates} attendanceMatrix={attendanceMatrix} />
             )}
         </div>
     );
 };
-
-const Analysis = ({
-    selectedCategory,
-    chartData,
-}: {
-    selectedCategory: string;
-    chartData: ChartData<'line', number[], string>;
-}) => {
-    const [selectedDate, setSelectedDate] = useState<string>('');
-    const [absentees, setAbsentees] = useState<Member[]>([]);
-
-    useEffect(() => {
-        if (!selectedDate) return;
-
-        const fetchAbsentees = async () => {
-            const res = await fetch(`/api/googleSheet?sheet=${selectedCategory}`);
-            const json = await res.json();
-
-            if (!json.ok || !json.data) {
-                console.error('Invalid data structure:', json);
-                return;
-            }
-
-            const categoryData: Member[] = json.data;
-            const absenteesList = categoryData
-                .filter((entry) => {
-                    const status = entry[selectedDate];
-                    if (selectedCategory === '구역예배') {
-                        return !status || status === '미참여' || status === ''; // 공란 또는 불참
-                    }
-                    if (selectedCategory === '총특교' || selectedCategory === '지정교') {
-                        return status === '미시청'; // 미시청
-                    }
-                    if (selectedCategory === '말노정') {
-                        return status === '-' || status === '' || status === '0'; // -, 공란, 0
-                    }
-                    if (selectedCategory === '월정기교육') {
-                        return status.includes('불참');
-                    }
-                    return false; // 기본적으로 불참을 제외한 경우
-                })
-                .map((entry) => ({
-                    이름: entry.이름,
-                    구역: entry.구역,
-                    직책: entry.직책,
-                    reason: entry[selectedDate]?.split('(')[1]?.replace(')', '') || '사유 없음',
-                }));
-
-            setAbsentees(absenteesList);
-        };
-
-        fetchAbsentees();
-    }, [selectedDate, selectedCategory]);
-
-    const groupedAbsentees = absentees.reduce((acc, member) => {
-        const team = member.구역.split('-')[0];
-        if (!acc[team]) {
-            acc[team] = [];
-        }
-        acc[team].push(member);
-        return acc;
-    }, {} as Record<string, Member[]>);
-
-    const sortedAbsentees = Object.keys(groupedAbsentees).sort((a, b) => {
-        return groupedAbsentees[b].length - groupedAbsentees[a].length;
-    });
-
-    return (
-        <div className="mb-4">
-            <h2 className="text-xl font-semibold mb-4">📊 분석하기</h2>
-            <div className="mb-4">
-                <label
-                    htmlFor="dateSelect"
-                    className="mr-2 font-medium"
-                >
-                    날짜 선택:
-                </label>
-                <select
-                    id="dateSelect"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-4 py-2 border rounded-md shadow-sm"
-                >
-                    <option value="">날짜를 선택하세요</option>
-                    {(chartData.labels || []).map((date) => (
-                        <option
-                            key={date as string}
-                            value={date as string}
-                        >
-                            {date as string}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {selectedDate && (
-                <div className="mb-4">
-                    <h2 className="text-lg font-semibold mb-2">📌 불참자 목록 ({selectedDate}):</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
-                        {sortedAbsentees.map((team) => (
-                            <div
-                                key={team}
-                                className="bg-white shadow-md rounded-lg p-4 border border-gray-200"
-                            >
-                                <h3 className="text-md font-semibold mb-2 text-center">
-                                    🔹 팀 {team} ({groupedAbsentees[team].length}명)
-                                </h3>
-                                <table className="w-full text-sm border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-100">
-                                            <th className="border px-2 py-1">구역</th> {/* 사유 대신 구역으로 변경 */}
-                                            <th className="border px-2 py-1">이름</th>
-                                            <th className="border px-2 py-1">직책</th>
-                                            {selectedCategory === '월정기교육' ? (
-                                                <th className="border px-2 py-1">사유</th>
-                                            ) : null}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {groupedAbsentees[team].map((member) => (
-                                            <tr
-                                                key={member.이름}
-                                                className="text-center"
-                                            >
-                                                <td className="border px-2 py-1">{member.구역}</td>
-                                                <td className="border px-2 py-1">{member.이름}</td>
-                                                <td className="border px-2 py-1">{member.직책}</td>
-
-                                                {selectedCategory === '월정기교육' ? (
-                                                    <td className="border px-2 py-1">{member.reason}</td>
-                                                ) : null}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-function AttendanceTable({ dates, attendanceMatrix }: Props) {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-
-    // 정렬 함수
-    const sortedData = [...attendanceMatrix].sort((a, b) => {
-        if (!sortConfig) return 0;
-        const { key, direction } = sortConfig;
-        const valueA = a[key] ?? '';
-        const valueB = b[key] ?? '';
-
-        if (valueA < valueB) return direction === 'asc' ? -1 : 1;
-        if (valueA > valueB) return direction === 'asc' ? 1 : -1;
-        return 0;
-    });
-
-    // 필터링
-    const filteredData = sortedData.filter((row) => row.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    // 정렬 변경 함수
-    const toggleSort = (key: string) => {
-        setSortConfig((prev) => {
-            if (prev?.key === key) {
-                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-            }
-            return { key, direction: 'asc' };
-        });
-    };
-
-    return (
-        <div className="p-4">
-            <Input
-                type="text"
-                placeholder="이름 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="mb-4"
-            />
-            <Table className="border border-gray-200">
-                <TableHeader className="bg-gray-100">
-                    <TableRow>
-                        <TableHead
-                            onClick={() => toggleSort('구역')}
-                            className="cursor-pointer"
-                        >
-                            구역 <ArrowUpDown className="inline-block w-4 h-4" />
-                        </TableHead>
-                        <TableHead
-                            onClick={() => toggleSort('name')}
-                            className="cursor-pointer"
-                        >
-                            이름 <ArrowUpDown className="inline-block w-4 h-4" />
-                        </TableHead>
-
-                        {dates.map((date, index) => (
-                            <TableHead
-                                key={index}
-                                onClick={() => toggleSort(date)}
-                                className="cursor-pointer text-center"
-                            >
-                                {date} <ArrowUpDown className="inline-block w-4 h-4" />
-                            </TableHead>
-                        ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {filteredData.map((row, index) => (
-                        <TableRow
-                            key={index}
-                            className="hover:bg-gray-50"
-                        >
-                            <TableCell className="font-medium">{row.구역 || '-'}</TableCell> {/* 구역 값 출력 */}
-                            <TableCell className="font-medium">{row.name}</TableCell>
-                            {dates.map((date, i) => (
-                                <TableCell
-                                    key={i}
-                                    className="text-center"
-                                >
-                                    {row[date] ?? '-'}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
-    );
-}
 
 export default Education;
