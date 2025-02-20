@@ -14,3 +14,6 @@ export const excludedTimesAndPlaces = [
     '대면 그외',
     '선교교회',
 ];
+export const exVisit = ['대체(대면)', '당일 줌', '내부복(그외)', '대체(비대면)', '내부복(그외)', '당일 외 대면'];
+
+export const textVisit = ['문자및전화'];

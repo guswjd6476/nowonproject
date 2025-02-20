@@ -22,13 +22,13 @@ type Member = {
     이름: string;
     구역: string;
     직책: string;
-    [key: string]: string; // 날짜별 출석 정보 포함
+    [key: string]: string;
 };
 
 type ViewType = 'chart' | 'table';
 
 type TeamAttendanceByDate = {
-    [date: string]: Record<string, number[]>; // 날짜별 팀별 참석 여부 저장
+    [date: string]: Record<string, number[]>;
 };
 
 type ChartDataset = {
@@ -40,14 +40,18 @@ type ChartDataset = {
 };
 
 const categories = ['주일예배', '삼일예배'];
+const exVisit = ['대체(대면)', '내부복(그외)', '대체(비대면)', '내부복(그외)', '당일 외 대면'];
+const textVisit = ['문자및전화'];
 
-const Accounting = () => {
+const VisitEducation = () => {
     const [loading, setLoading] = useState<boolean>(true);
     const [chartData, setChartData] = useState<ChartData<'line', number[], string>>({ labels: [], datasets: [] });
-    const [attendanceMatrix, setAttendanceMatrix] = useState<AttendanceMatrixRow[]>([]); // 사용하기 위해 상태로 관리
+    const [attendanceMatrix, setAttendanceMatrix] = useState<AttendanceMatrixRow[]>([]);
     const [dates, setDates] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]);
     const [selectedView, setSelectedView] = useState<ViewType>('chart');
+    const [showGita, setShowGita] = useState<boolean>(false);
+    const [showText, setShowText] = useState<boolean>(false);
 
     useEffect(() => {
         const fetchAndCalculateParticipation = async () => {
@@ -83,10 +87,9 @@ const Accounting = () => {
 
                 const attendanceMatrix = names.map((name: string) => {
                     const row: AttendanceMatrixRow = { name };
-                    // 구역 추가
                     const member = json.data.find((item: Member) => item.이름 === name);
 
-                    row.구역 = member?.구역 || '-'; // 구역 정보가 없으면 기본값 '-' 설정
+                    row.구역 = member?.구역 || '-';
 
                     dates.forEach((date: string) => {
                         const status = member?.[date] || '불참';
@@ -103,7 +106,23 @@ const Accounting = () => {
                     if (!team) return;
 
                     allDates.forEach((date: string) => {
-                        const attendance = excludedTimesAndPlaces.includes(entry[date]) ? 1 : 0;
+                        let attendance = 0;
+
+                        if (showGita && !showText) {
+                            attendance = exVisit.includes(entry[date]) ? 1 : 0;
+                        } else if (showText && !showGita) {
+                            attendance = textVisit.includes(entry[date]) ? 1 : 0;
+                        } else if (!showGita && !showText) {
+                            attendance = excludedTimesAndPlaces.includes(entry[date]) ? 1 : 0;
+                        } else if (showGita && showText) {
+                            attendance =
+                                excludedTimesAndPlaces.includes(entry[date]) ||
+                                exVisit.includes(entry[date]) ||
+                                textVisit.includes(entry[date])
+                                    ? 1
+                                    : 0;
+                        }
+
                         teamAttendanceByDate[date] = teamAttendanceByDate[date] || {};
                         teamAttendanceByDate[date][team] = teamAttendanceByDate[date][team] || [];
                         teamAttendanceByDate[date][team].push(attendance);
@@ -115,10 +134,10 @@ const Accounting = () => {
                 ).sort();
 
                 const teamColors: Record<string, string> = {
-                    '1': 'rgb(239, 68, 68)', // Red
-                    '2': 'rgb(59, 130, 246)', // Blue
-                    '3': 'rgb(254, 202, 87)', // Yellow
-                    '4': 'rgb(34, 197, 94)', // Green
+                    '1': 'rgb(239, 68, 68)',
+                    '2': 'rgb(59, 130, 246)',
+                    '3': 'rgb(254, 202, 87)',
+                    '4': 'rgb(34, 197, 94)',
                 };
 
                 const datasets: ChartDataset[] = teams.map((team) => ({
@@ -147,7 +166,7 @@ const Accounting = () => {
         };
 
         fetchAndCalculateParticipation();
-    }, [selectedCategory]);
+    }, [selectedCategory, showGita, showText]);
 
     if (loading) return <div>Loading...</div>;
 
@@ -168,6 +187,28 @@ const Accounting = () => {
                     </button>
                 ))}
             </div>
+
+            <div className="mb-4">
+                <label className="mr-4">
+                    <input
+                        type="checkbox"
+                        checked={showGita}
+                        onChange={() => setShowGita(!showGita)}
+                        className="mr-2"
+                    />
+                    기타예배
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showText}
+                        onChange={() => setShowText(!showText)}
+                        className="mr-2"
+                    />
+                    문자예배
+                </label>
+            </div>
+
             <div className="mb-4">
                 <button
                     className={`px-4 py-2 rounded-md mr-2 ${
@@ -188,159 +229,52 @@ const Accounting = () => {
             </div>
 
             {selectedView === 'chart' ? (
-                <>
-                    <div className="mb-4">
-                        <h2 className="text-xl font-semibold">그래프</h2>
-                        <div className="relative">
-                            <Line
-                                data={chartData}
-                                options={{
-                                    responsive: true,
-                                    plugins: {
-                                        title: {
-                                            display: true,
-                                            text: '팀별 참석률',
-                                        },
-                                        tooltip: {
-                                            mode: 'index',
-                                            intersect: false,
-                                            callbacks: {
-                                                label: (tooltipItem) => {
-                                                    const { datasetIndex, dataIndex } = tooltipItem;
-                                                    const team = chartData.datasets[datasetIndex]?.label?.split(' ')[1];
-                                                    const attendance =
-                                                        chartData.datasets[datasetIndex]?.data[dataIndex];
-                                                    return `${team} 팀: ${
-                                                        attendance ? (attendance * 100).toFixed(2) + '%' : '없음'
-                                                    }`;
-                                                },
-                                            },
-                                        },
-                                    },
-                                    scales: {
-                                        y: {
-                                            min: 0,
-                                            max: 1,
-                                            ticks: {
-                                                callback: (value) => `${(Number(value) * 100).toFixed(0)}%`,
-                                            },
-                                        },
-                                    },
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    <Analysis selectedCategory={selectedCategory} chartData={chartData} />
-                </>
-            ) : (
-                <>
-                    <AttendanceTable dates={dates} attendanceMatrix={attendanceMatrix} />
-                </>
-            )}
-        </div>
-    );
-};
-const Analysis = ({
-    selectedCategory,
-    chartData,
-}: {
-    selectedCategory: string;
-    chartData: ChartData<'line', number[], string>;
-}) => {
-    const [selectedDate, setSelectedDate] = useState<string>('');
-    const [absentees, setAbsentees] = useState<Member[]>([]);
-
-    useEffect(() => {
-        if (!selectedDate) return;
-
-        const fetchAbsentees = async () => {
-            const res = await fetch(`/api/googleSheet?sheet=${selectedCategory}`);
-            const json = await res.json();
-
-            if (!json.ok || !json.data) {
-                console.error('Invalid data structure:', json);
-                return;
-            }
-
-            const categoryData: Member[] = json.data;
-
-            const absenteesList = categoryData
-                .filter((entry) => {
-                    const attendanceStatus = entry[selectedDate];
-                    return !excludedTimesAndPlaces.some((excluded) => attendanceStatus.includes(excluded));
-                })
-                .map((entry) => ({
-                    이름: entry.이름,
-                    구역: entry.구역,
-                    직책: entry.직책,
-                    reason: entry[selectedDate] || '사유 없음',
-                }));
-
-            setAbsentees(absenteesList);
-        };
-
-        fetchAbsentees();
-    }, [selectedDate, selectedCategory]);
-
-    const groupedAbsentees = absentees.reduce((acc, member) => {
-        const team = member.구역.split('-')[0];
-        if (!acc[team]) {
-            acc[team] = [];
-        }
-        acc[team].push(member);
-        return acc;
-    }, {} as Record<string, Member[]>);
-
-    const sortedAbsentees = Object.keys(groupedAbsentees).sort((a, b) => {
-        const teamAAbsentees = groupedAbsentees[a].length;
-        const teamBAbsentees = groupedAbsentees[b].length;
-        return teamBAbsentees - teamAAbsentees;
-    });
-
-    return (
-        <div className="mb-4">
-            <h2 className="text-xl font-semibold">분석하기</h2>
-            <div className="mb-4">
-                <label htmlFor="dateSelect" className="mr-2">
-                    날짜 선택:
-                </label>
-                <select
-                    id="dateSelect"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-4 py-2"
-                >
-                    <option value="">날짜를 선택하세요</option>
-                    {(chartData.labels || []).map((date) => (
-                        <option key={date as string} value={date as string}>
-                            {date as string}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {selectedDate && (
                 <div className="mb-4">
-                    <h2 className="text-lg font-semibold">불참자 목록 ({selectedDate}):</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                        {sortedAbsentees.map((team) => (
-                            <div key={team} className="w-full">
-                                <h3 className="text-md font-semibold mb-2">팀 {team}</h3>
-                                <ul>
-                                    {groupedAbsentees[team].map((member) => (
-                                        <li key={member.이름}>
-                                            {member.이름} ({member.reason})
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ))}
-                    </div>
+                    <h2 className="text-xl font-semibold">그래프</h2>
+                    <Line
+                        data={chartData}
+                        options={{
+                            responsive: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: '팀별 참석률',
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    callbacks: {
+                                        label: (tooltipItem) => {
+                                            const { datasetIndex, dataIndex } = tooltipItem;
+                                            const team = chartData.datasets[datasetIndex]?.label?.split(' ')[1];
+                                            const attendance = chartData.datasets[datasetIndex]?.data[dataIndex];
+                                            return `${team} 팀: ${
+                                                attendance ? (attendance * 100).toFixed(2) + '%' : '없음'
+                                            }`;
+                                        },
+                                    },
+                                },
+                            },
+                            scales: {
+                                y: {
+                                    min: 0,
+                                    max: 1,
+                                    ticks: {
+                                        callback: (value) => `${(Number(value) * 100).toFixed(0)}%`,
+                                    },
+                                },
+                            },
+                        }}
+                    />
                 </div>
+            ) : (
+                <AttendanceTable
+                    dates={dates}
+                    attendanceMatrix={attendanceMatrix}
+                />
             )}
         </div>
     );
 };
 
-export default Accounting;
+export default VisitEducation;
