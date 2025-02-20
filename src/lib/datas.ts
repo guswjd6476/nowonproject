@@ -10,4 +10,7 @@ export const excludedTimesAndPlaces = [
     '21시',
     '오후 9:30:00',
     '15:30',
+    '내부복(당일)',
+    '대면 그외',
+    '선교교회',
 ];
